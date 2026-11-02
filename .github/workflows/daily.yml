@@ -2,7 +2,7 @@ name: Generate daily video
 
 on:
   schedule:
-    - cron: "30 4 * * *"   # every day at 04:30 UTC (10:00 AM India time)
+    - cron: "30 4 * * *"
   workflow_dispatch:
 
 permissions:
@@ -31,7 +31,7 @@ jobs:
       - name: Install Python packages
         run: pip install -r requirements.txt
 
-      -       - name: Generate video (random topic)
+      - name: Generate video (random topic)
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}

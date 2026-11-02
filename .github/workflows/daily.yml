@@ -1,0 +1,49 @@
+name: Generate daily video
+
+on:
+  schedule:
+    - cron: "30 4 * * *"   # every day at 04:30 UTC (10:00 AM India time)
+  workflow_dispatch:        # lets you run it manually from the Actions tab
+
+permissions:
+  contents: write           # needed to save history.json (avoids repeat topics)
+
+jobs:
+  make-video:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install FFmpeg and fonts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+
+      - name: Install Python packages
+        run: pip install -r requirements.txt
+
+      - name: Generate video (random topic)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+        run: python make_video.py
+
+      - name: Save video as downloadable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: video-${{ github.run_number }}
+          path: output/
+          retention-days: 14
+
+      - name: Remember topic so it is never repeated
+        run: |
+          git config user.name "video-bot"
+          git config user.email "video-bot@users.noreply.github.com"
+          git add history.json
+          git diff --staged --quiet || (git commit -m "Update topic history" && git push)

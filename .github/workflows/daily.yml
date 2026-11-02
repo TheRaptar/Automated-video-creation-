@@ -1,31 +1,24 @@
-
 name: Generate daily video
 
 on:
   schedule:
-    - cron: "30 4 * * *"
-  workflow_dispatch:
+    - cron: "30 4 * * *"   # every day at 04:30 UTC (10:00 AM India time)
+  workflow_dispatch:        # lets you run it manually from the Actions tab
 
 permissions:
-  contents: write
-
-defaults:
-  run:
-    working-directory: Automated-video-creation
+  contents: write           # needed to save history.json (avoids repeat topics)
 
 jobs:
   make-video:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
 
       - name: Install FFmpeg and fonts
         run: |

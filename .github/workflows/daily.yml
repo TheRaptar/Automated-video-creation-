@@ -31,10 +31,11 @@ jobs:
       - name: Install Python packages
         run: pip install -r requirements.txt
 
-      - name: Generate video (random topic)
+      -       - name: Generate video (random topic)
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+          GEMINI_MODEL: gemini-3.8-flash
         run: python make_video.py
 
       - name: Save video as downloadable artifact

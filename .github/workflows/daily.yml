@@ -3,10 +3,14 @@ name: Generate daily video
 on:
   schedule:
     - cron: "30 4 * * *"   # every day at 04:30 UTC (10:00 AM India time)
-  workflow_dispatch:        # lets you run it manually from the Actions tab
+  workflow_dispatch:
 
 permissions:
-  contents: write           # needed to save history.json (avoids repeat topics)
+  contents: write
+
+defaults:
+  run:
+    working-directory: Automated-video-creation
 
 jobs:
   make-video:
@@ -18,7 +22,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
 
       - name: Install FFmpeg and fonts
         run: |
@@ -38,7 +41,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: video-${{ github.run_number }}
-          path: output/
+          path: Automated-video-creation/output/
           retention-days: 14
 
       - name: Remember topic so it is never repeated

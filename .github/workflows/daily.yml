@@ -1,3 +1,4 @@
+
 name: Generate daily video
 
 on:
@@ -16,10 +17,13 @@ jobs:
   make-video:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
@@ -42,7 +46,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: video-${{ github.run_number }}
-          path: Automated-video-creation/output/
+          path: output/
           retention-days: 14
 
       - name: Remember topic so it is never repeated

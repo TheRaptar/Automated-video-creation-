@@ -18,6 +18,7 @@ import random
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import requests
@@ -92,6 +93,27 @@ def save_history(items: list[str]) -> None:
 
 
 # ------------------------------------------------------------ 1. random topic + script
+GEMINI_BASE = os.environ.get("GEMINI_BASE", "https://generativelanguage.googleapis.com/v1beta")
+
+
+def _gemini_models() -> list[str]:
+    """Your preferred model first, then other currently available 'flash' models (auto-discovered)."""
+    names = [GEMINI_MODEL]
+    try:
+        r = requests.get(f"{GEMINI_BASE}/models", params={"pageSize": 200},
+                         headers={"x-goog-api-key": GEMINI_API_KEY}, timeout=30)
+        if r.ok:
+            skip = ("image", "tts", "audio", "live", "embed", "native", "robotics", "computer")
+            found = sorted((m["name"].split("/")[-1] for m in r.json().get("models", [])
+                            if "generateContent" in m.get("supportedGenerationMethods", [])
+                            and "flash" in m["name"] and not any(s in m["name"] for s in skip)),
+                           reverse=True)
+            names += [n for n in found if n not in names]
+    except requests.RequestException as e:
+        print(f"  (could not list models: {type(e).__name__})")
+    return names[:5]
+
+
 def generate_script(topic: str | None, history: list[str]) -> dict:
     if OFFLINE:
         return {
@@ -127,24 +149,37 @@ Rules:
 - Scene 1 must be a strong hook. The last scene is a short call to action (e.g. follow for more).
 - Facts must be accurate. No invented statistics or quotes.
 - search_term must describe something visually filmable (e.g. "ocean waves", "city traffic", "microscope")."""
-    url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
-           f"{GEMINI_MODEL}:generateContent")
     body = {"contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {"responseMimeType": "application/json", "temperature": 1.0}}
-    for attempt in range(3):
-        try:
-            r = requests.post(url, json=body, timeout=90,
-                              headers={"x-goog-api-key": GEMINI_API_KEY})
+    headers = {"x-goog-api-key": GEMINI_API_KEY}
+    models = _gemini_models()
+    print(f"    Gemini models to try: {', '.join(models)}")
+    for rnd in range(3):                      # 3 rounds over all models, waiting in between
+        for model in models:
+            try:
+                r = requests.post(f"{GEMINI_BASE}/models/{model}:generateContent",
+                                  json=body, headers=headers, timeout=60)
+            except requests.RequestException as e:
+                print(f"  {model}: network error ({type(e).__name__})")
+                continue
             if r.ok:
-                text = r.json()["candidates"][0]["content"]["parts"][0]["text"]
-                data = json.loads(text.replace("```json", "").replace("```", "").strip())
-                if data.get("scenes"):
-                    data.setdefault("topic", data.get("title", "unknown"))
-                    return data
-            print(f"Gemini attempt {attempt + 1} failed: {r.status_code} {r.text[:200]}")
-        except Exception as e:  # network / JSON problems: retry
-            print(f"Gemini attempt {attempt + 1} error: {e}")
-    sys.exit("Could not get a script from Gemini. Check GEMINI_API_KEY / GEMINI_MODEL.")
+                try:
+                    text = r.json()["candidates"][0]["content"]["parts"][0]["text"]
+                    data = json.loads(text.replace("```json", "").replace("```", "").strip())
+                    if data.get("scenes"):
+                        data.setdefault("topic", data.get("title", "unknown"))
+                        return data
+                except Exception as e:
+                    print(f"  {model}: unusable answer ({e})")
+                continue
+            print(f"  {model}: HTTP {r.status_code} {r.text[:120].strip()}")
+            if r.status_code in (401, 403):
+                sys.exit("Gemini rejected the API key (check the GEMINI_API_KEY secret).")
+        if rnd < 2:
+            wait = 20 * (rnd + 1)
+            print(f"  all models busy/failed - waiting {wait}s then retrying...")
+            time.sleep(wait)
+    sys.exit("Could not get a script from Gemini after several retries (service busy or key invalid).")
 
 
 # ------------------------------------------------------------ 2. voice

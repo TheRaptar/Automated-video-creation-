@@ -93,6 +93,54 @@ def save_history(items: list[str]) -> None:
 
 
 # ------------------------------------------------------------ 1. random topic + script
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_BASE = os.environ.get("GROQ_BASE", "https://api.groq.com/openai/v1")
+
+
+def _groq_script(prompt: str):
+    """Backup script writer (free Groq tier). Returns the script dict, or None."""
+    if not GROQ_API_KEY:
+        return None
+    headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
+    models = [GROQ_MODEL]
+    try:
+        r = requests.get(f"{GROQ_BASE}/models", headers=headers, timeout=30)
+        if r.ok:
+            skip = ("whisper", "guard", "tts", "embed", "playai", "vision", "distil")
+            found = sorted((m["id"] for m in r.json().get("data", [])
+                            if not any(x in m["id"] for x in skip)), reverse=True)
+            models += [m for m in found if m not in models][:3]
+    except requests.RequestException:
+        pass
+    print(f"  Falling back to Groq: {', '.join(models)}")
+    for rnd in range(2):
+        for model in models:
+            try:
+                r = requests.post(f"{GROQ_BASE}/chat/completions", headers=headers, timeout=60, json={
+                    "model": model, "temperature": 1.0,
+                    "response_format": {"type": "json_object"},
+                    "messages": [{"role": "user", "content": prompt}]})
+            except requests.RequestException as e:
+                print(f"  groq {model}: network error ({type(e).__name__})")
+                continue
+            if r.ok:
+                try:
+                    data = json.loads(r.json()["choices"][0]["message"]["content"])
+                    if data.get("scenes"):
+                        data.setdefault("topic", data.get("title", "unknown"))
+                        return data
+                except Exception as e:
+                    print(f"  groq {model}: unusable answer ({e})")
+                continue
+            print(f"  groq {model}: HTTP {r.status_code} {r.text[:120].strip()}")
+            if r.status_code in (401, 403):
+                return None
+        if rnd < 1:
+            time.sleep(15)
+    return None
+
+
 GEMINI_BASE = os.environ.get("GEMINI_BASE", "https://generativelanguage.googleapis.com/v1beta")
 
 
@@ -154,8 +202,11 @@ Rules:
     headers = {"x-goog-api-key": GEMINI_API_KEY}
     models = _gemini_models()
     print(f"    Gemini models to try: {', '.join(models)}")
-    for rnd in range(3):                      # 3 rounds over all models, waiting in between
+    dead: set = set()                         # models with no free quota
+    for rnd in range(2):                      # 2 rounds over all models, waiting in between
         for model in models:
+            if model in dead:
+                continue
             try:
                 r = requests.post(f"{GEMINI_BASE}/models/{model}:generateContent",
                                   json=body, headers=headers, timeout=60)
@@ -173,13 +224,19 @@ Rules:
                     print(f"  {model}: unusable answer ({e})")
                 continue
             print(f"  {model}: HTTP {r.status_code} {r.text[:120].strip()}")
+            if r.status_code == 429 and "quota" in r.text.lower():
+                dead.add(model)
             if r.status_code in (401, 403):
                 sys.exit("Gemini rejected the API key (check the GEMINI_API_KEY secret).")
-        if rnd < 2:
-            wait = 20 * (rnd + 1)
+        if rnd < 1:
+            wait = 15
             print(f"  all models busy/failed - waiting {wait}s then retrying...")
             time.sleep(wait)
-    sys.exit("Could not get a script from Gemini after several retries (service busy or key invalid).")
+    data = _groq_script(prompt)
+    if data:
+        return data
+    sys.exit("Could not get a script from Gemini" + (" or Groq" if GROQ_API_KEY else
+             " (add a free GROQ_API_KEY secret as a backup)") + " - services busy or keys invalid.")
 
 
 # ------------------------------------------------------------ 2. voice

@@ -102,10 +102,17 @@ def main() -> None:
                 up = requests.put(session_url, data=fh, timeout=600,
                                   headers={"Content-Type": "video/mp4", "Content-Length": str(size)})
             if up.ok:
-                vid = up.json()["id"]
-                privacy = os.environ.get("YT_PRIVACY", "private")
+                res = up.json()
+                vid = res["id"]
+                wanted = os.environ.get("YT_PRIVACY", "private")
+                actual = res.get("status", {}).get("privacyStatus", wanted)
                 summary(f"### YouTube upload done\n**{meta['title']}**  \n"
-                        f"https://youtube.com/shorts/{vid}  (privacy: {privacy})")
+                        f"https://youtube.com/shorts/{vid}  (requested: {wanted}, actual: {actual})")
+                if actual != wanted:
+                    summary("\n**WARNING:** YouTube kept this video as "
+                            f"`{actual}`. New or unaudited API projects are locked to private. "
+                            "Request an API audit (YouTube API Services - Audit and Quota Extension "
+                            "form) or switch videos to public manually in YouTube Studio.")
                 return
             print(f"Upload attempt {attempt + 1} failed: {up.status_code} {up.text[:300]}")
         except requests.RequestException as e:

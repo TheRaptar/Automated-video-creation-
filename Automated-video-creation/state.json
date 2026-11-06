@@ -2,12 +2,148 @@
   "recent_categories": [
     "productivity and study tips",
     "psychology and human behavior",
-    "the human body"
+    "the human body",
+    "world records"
   ],
-  "last_style": "top3",
+  "last_style": "whatif",
   "uploads": [
     "2026-11-06T08:48:56+00:00",
     "2026-11-06T12:09:20+00:00",
-    "2026-11-06T12:26:02+00:00"
+    "2026-11-06T12:26:02+00:00",
+    "2026-11-06T15:00:01+00:00"
+  ],
+  "trends": {
+    "date": "2026-11-06",
+    "ideas": [
+      {
+        "topic": "Semiconductors and Silicon Chip Manufacturing",
+        "angle": "How do engineers carve billions of switches onto a piece of silicon the size of a fingernail?",
+        "why_trending": "tsm stock / chip rout news",
+        "format": "short",
+        "style": "how",
+        "score": 9.0,
+        "used": false
+      },
+      {
+        "topic": "Cloud Computing Data Centers",
+        "angle": "What actually happens behind the scenes when you stream a game from a server miles away?",
+        "why_trending": "cloud gaming trends",
+        "format": "short",
+        "style": "whatif",
+        "score": 8.0,
+        "used": false
+      },
+      {
+        "topic": "Biomimicry in Drone Technology",
+        "angle": "How scientists are using real moth antennae to let drones hunt down specific chemical scents",
+        "why_trending": "Drone Uses A Moth Antenna To Track Scents trending video",
+        "format": "short",
+        "style": "fact",
+        "score": 9.0,
+        "used": false
+      },
+      {
+        "topic": "Giant Computer Graphics Hardware",
+        "angle": "Why do advanced graphics processing units need to be massive, heavy metal monsters to cool themselves?",
+        "why_trending": "NVIDIA's 50-Pound GPU Monster trending video",
+        "format": "short",
+        "style": "top3",
+        "score": 8.0,
+        "used": false
+      },
+      {
+        "topic": "Atmospheric River Weather Patterns",
+        "angle": "How invisible rivers of water vapor in the sky dump feet of snow across the mountains",
+        "why_trending": "Feet of Snow Expected in the West / India Weather signals",
+        "format": "short",
+        "style": "fact",
+        "score": 9.0,
+        "used": false
+      },
+      {
+        "topic": "Computer Keyboard Firmware and Sticky Keys",
+        "angle": "Why does a computer keyboard start beeping at you if you press Shift five times?",
+        "why_trending": "What is sticky keys trending video",
+        "format": "short",
+        "style": "how",
+        "score": 8.0,
+        "used": false
+      },
+      {
+        "topic": "The Physics of High-Performance Microchips",
+        "angle": "The wild history and intense physics of how the world went from vacuum tubes to nanometer transistors",
+        "why_trending": "tsm stock / NVIDIA trends",
+        "format": "long",
+        "style": "how",
+        "score": 9.0,
+        "used": false
+      },
+      {
+        "topic": "The Evolution of Digital Storage Media",
+        "angle": "From rooms full of magnetic tape to pocket solid-state drives: how we learned to trap light and electrons to store data",
+        "why_trending": "Cloud gaming and hardware trends",
+        "format": "long",
+        "style": "fact",
+        "score": 8.0,
+        "used": false
+      },
+      {
+        "topic": "The Mechanics of Remote Sensory Tracking in Insects",
+        "angle": "Inside the ultra-sensitive olfactory world of moths and how their nervous system processes scents faster than modern instruments",
+        "why_trending": "Drone Uses A Moth Antenna trending video",
+        "format": "long",
+        "style": "fact",
+        "score": 8.0,
+        "used": false
+      },
+      {
+        "topic": "The Cartographer Who Fooled a Nation",
+        "angle": "An original story about a lonely mapmaker who accidentally created a fake town on a paper map to catch copyright thieves\u2014only to find people actually tried to move there.",
+        "why_trending": "America's Strangest Borders / geography shorts success",
+        "format": "story",
+        "style": "story",
+        "score": 9.0,
+        "used": false
+      },
+      {
+        "topic": "The Deep Sea Explorer Who Built a False Floor",
+        "angle": "A historical tale of a marine engineer who discovered a bizarre acoustic dead zone in the ocean where sound waves bounce infinitely.",
+        "why_trending": "Ocean and sea creatures niche momentum",
+        "format": "story",
+        "style": "story",
+        "score": 8.0,
+        "used": false
+      },
+      {
+        "topic": "The Clockmaker's Secret Code",
+        "angle": "The story of an ancient artisan who hid a perpetual calendar mechanism inside an olive wood box that kept ticking long after empires fell.",
+        "why_trending": "Ancient history and geography trends",
+        "format": "story",
+        "style": "story",
+        "score": 8.0,
+        "used": false
+      }
+    ],
+    "format_trends": [
+      "Ultra-short 10 to 15 second hardware teardowns and tech comparison hooks",
+      "High-contrast visual questions starting with direct assertions ('What is X?? And how to turn off...')",
+      "Nature vocabulary and climate phenomena lessons with immediate subtitle overlays"
+    ],
+    "title_patterns": [
+      "What is [Topic]?? And how to [Action]?",
+      "[Adjective] [Object] Is Mind-Blowing \ud83e\udd2f #[Keyword] #shorts",
+      "Phones Now VS Phones In [Year]."
+    ]
+  },
+  "videos": [
+    {
+      "id": "JTvouqFqthM",
+      "fmt": "short",
+      "category": "world records",
+      "style": "whatif",
+      "source": "category",
+      "title": "Swimming In Your Own Spit \ud83e\udd2f #worldrecord #shorts",
+      "ts": "2026-11-06T15:00:01+00:00"
+    }
   ]
 }

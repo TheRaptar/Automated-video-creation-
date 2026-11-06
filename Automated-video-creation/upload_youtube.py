@@ -1,26 +1,29 @@
 #!/usr/bin/env python3
 """
-Uploads output/video.mp4 to YouTube as a Short, using only `requests` (no Google libraries).
+Uploads output/video.mp4 to YouTube (Short or long-form, public by default) using only `requests`.
 
-Needs 3 secrets (see README): YT_CLIENT_ID, YT_CLIENT_SECRET, YT_REFRESH_TOKEN.
-If they are missing, the script skips quietly so the rest of the workflow still succeeds.
+Needs 3 secrets: YT_CLIENT_ID, YT_CLIENT_SECRET, YT_REFRESH_TOKEN. If missing, it skips quietly.
 
 Optional env vars:
-  YT_PRIVACY     private | unlisted | public   (default: private)
-  YT_CATEGORY    YouTube category id           (default: 27 = Education)
-  YT_SYNTHETIC   1 = declare "altered/synthetic content" (default: 1)
+  YT_PRIVACY            private | unlisted | public   (default: private)
+  YT_CATEGORY           YouTube category id           (default: 27 = Education)
+  YT_SYNTHETIC          1 = declare "altered/synthetic content" (default: 1)
+  MAX_UPLOADS_PER_DAY   safety limit per UTC day (default 5; the free API quota allows about 6)
 """
 import json
 import os
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
 
 TOKEN_URL = os.environ.get("YT_TOKEN_URL", "https://oauth2.googleapis.com/token")
 UPLOAD_URL = os.environ.get("YT_UPLOAD_URL", "https://www.googleapis.com/upload/youtube/v3/videos")
-VIDEO, META = Path("output/video.mp4"), Path("output/metadata.json")
+THUMB_URL = os.environ.get("YT_THUMB_URL", "https://www.googleapis.com/upload/youtube/v3/thumbnails/set")
+VIDEO, META, THUMB, STATE = (Path("output/video.mp4"), Path("output/metadata.json"),
+                             Path("output/thumbnail.jpg"), Path("state.json"))
 
 
 def summary(text: str) -> None:
@@ -29,6 +32,14 @@ def summary(text: str) -> None:
     if path:
         with open(path, "a", encoding="utf-8") as fh:
             fh.write(text + "\n")
+
+
+def load_state() -> dict:
+    try:
+        d = json.loads(STATE.read_text(encoding="utf-8"))
+        return d if isinstance(d, dict) else {}
+    except Exception:
+        return {}
 
 
 def get_access_token() -> str:
@@ -49,10 +60,14 @@ def get_access_token() -> str:
 
 
 def build_body(meta: dict, synthetic: bool) -> dict:
-    title = meta["title"].strip()[:88] + " #Shorts"
+    is_short = meta.get("format", "short") == "short"
     desc = meta["description"].strip()
-    if "#shorts" not in desc.lower():
-        desc += "\n\n#Shorts"
+    if is_short:
+        title = meta["title"].strip()[:88] + " #Shorts"
+        if "#shorts" not in desc.lower():
+            desc += "\n\n#Shorts"
+    else:
+        title = meta["title"].strip()[:100]
     tags = [h.lstrip("#") for h in meta.get("hashtags", [])][:15]
     status = {"privacyStatus": os.environ.get("YT_PRIVACY", "private"),
               "selfDeclaredMadeForKids": False}
@@ -73,6 +88,22 @@ def start_session(token: str, body: dict, size: int) -> requests.Response:
         data=json.dumps(body), timeout=60)
 
 
+def set_thumbnail(token: str, video_id: str) -> None:
+    if not THUMB.exists():
+        return
+    try:
+        r = requests.post(THUMB_URL, params={"videoId": video_id, "uploadType": "media"},
+                          headers={"Authorization": f"Bearer {token}", "Content-Type": "image/jpeg"},
+                          data=THUMB.read_bytes(), timeout=120)
+        if r.ok:
+            print("Thumbnail set.")
+        else:
+            summary(f"Thumbnail not set ({r.status_code}). Custom thumbnails need a verified channel "
+                    "(youtube.com/verify).")
+    except requests.RequestException as e:
+        print(f"Thumbnail upload error (non-fatal): {e}")
+
+
 def main() -> None:
     needed = ("YT_CLIENT_ID", "YT_CLIENT_SECRET", "YT_REFRESH_TOKEN")
     if not all(os.environ.get(k) for k in needed):
@@ -80,6 +111,16 @@ def main() -> None:
         return
     if not VIDEO.exists() or not META.exists():
         sys.exit("output/video.mp4 or output/metadata.json is missing.")
+
+    # Safety limit: protects the API quota and prevents accidental spam if more schedules are added.
+    state = load_state()
+    uploads = state.get("uploads", [])
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    cap = int(os.environ.get("MAX_UPLOADS_PER_DAY", "5"))
+    if sum(1 for u in uploads if str(u).startswith(today)) >= cap:
+        summary(f"### Upload skipped\nDaily safety limit reached ({cap} uploads today). "
+                "The video is still available as a downloadable artifact.")
+        return
 
     meta = json.loads(META.read_text(encoding="utf-8"))
     size = VIDEO.stat().st_size
@@ -99,20 +140,25 @@ def main() -> None:
     for attempt in range(3):
         try:
             with open(VIDEO, "rb") as fh:
-                up = requests.put(session_url, data=fh, timeout=600,
+                up = requests.put(session_url, data=fh, timeout=1800,
                                   headers={"Content-Type": "video/mp4", "Content-Length": str(size)})
             if up.ok:
                 res = up.json()
                 vid = res["id"]
                 wanted = os.environ.get("YT_PRIVACY", "private")
                 actual = res.get("status", {}).get("privacyStatus", wanted)
-                summary(f"### YouTube upload done\n**{meta['title']}**  \n"
-                        f"https://youtube.com/shorts/{vid}  (requested: {wanted}, actual: {actual})")
+                kind = "Short" if meta.get("format", "short") == "short" else "long-form video"
+                summary(f"### YouTube upload done ({kind})\n**{meta['title']}**  \n"
+                        f"https://youtube.com/watch?v={vid}  (requested: {wanted}, actual: {actual})")
                 if actual != wanted:
                     summary("\n**WARNING:** YouTube kept this video as "
                             f"`{actual}`. New or unaudited API projects are locked to private. "
                             "Request an API audit (YouTube API Services - Audit and Quota Extension "
                             "form) or switch videos to public manually in YouTube Studio.")
+                if meta.get("format") == "long":
+                    set_thumbnail(token, vid)
+                state["uploads"] = (uploads + [datetime.now(timezone.utc).isoformat(timespec="seconds")])[-40:]
+                STATE.write_text(json.dumps(state, indent=2), encoding="utf-8")
                 return
             print(f"Upload attempt {attempt + 1} failed: {up.status_code} {up.text[:300]}")
         except requests.RequestException as e:

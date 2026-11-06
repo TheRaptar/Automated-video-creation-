@@ -1,23 +1,38 @@
 name: Generate and publish videos
 
-# Weekly plan (UTC; India time in brackets). Videos go to YouTube, and Shorts/Stories also to Instagram.
-#   Short A  every day        04:30 (10:00 AM)
-#   Long     Tue / Thu / Sat  10:30 (04:00 PM)   long-form, YouTube only
-#   Short B  every day        14:30 (08:00 PM)
-#   Story    Wed / Sun        07:30 (01:00 PM)   experimental illustrated story - remove the # to enable
+# All cron times are UTC.
+# India time (IST) is UTC + 5:30.
+#
+# Short A: Daily       04:30 UTC = 10:00 AM IST
+# Story:   Wed / Sun   06:30 UTC = 12:00 PM IST
+# Short B: Daily       07:30 UTC = 01:00 PM IST
+# Long:    Tue/Thu/Sat 10:30 UTC = 04:00 PM IST
+# Short C: Daily       14:30 UTC = 08:00 PM IST
+
 on:
   schedule:
     - cron: "30 4 * * *"
+    - cron: "30 6 * * 0,3"
+    - cron: "30 7 * * *"
     - cron: "30 10 * * 2,4,6"
     - cron: "30 14 * * *"
-    # - cron: "30 7 * * 3,0"
+
   workflow_dispatch:
     inputs:
       format:
-        description: "Which kind of video to make now?"
+        description: "Which kind of video should be generated?"
         type: choice
-        options: [short, long, story]
+        options:
+          - short
+          - long
+          - story
         default: short
+        required: true
+
+      categories:
+        description: "Optional topic/category (example: space, science, ocean)"
+        type: string
+        required: false
 
 permissions:
   contents: write
@@ -32,70 +47,123 @@ defaults:
 
 jobs:
   make-video:
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    env:
-      VIDEO_FORMAT: ${{ github.event.inputs.format || (github.event.schedule == '30 10 * * 2,4,6' && 'long' || (github.event.schedule == '30 7 * * 3,0' && 'story' || 'short')) }}
-    steps:
-      - uses: actions/checkout@v4
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
 
-      - uses: actions/setup-python@v5
+    env:
+      VIDEO_FORMAT: ${{ github.event.inputs.format || (github.event.schedule == '30 10 * * 2,4,6' && 'long' || ((github.event.schedule == '30 6 * * 0,3') && 'story' || 'short')) }}
+
+      CATEGORIES: ${{ github.event.inputs.categories || '' }}
+
+      PYTHONUNBUFFERED: "1"
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+      TZ: Asia/Kolkata
+
+    steps:
+      # 1. Get the latest source code
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      # 2. Set up Python with dependency caching
+      - name: Set up Python
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: Automated-video-creation/requirements.txt
 
+      # 3. Install FFmpeg and fonts
       - name: Install FFmpeg and fonts
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg fonts-dejavu-core
+          sudo apt-get install -y --no-install-recommends \
+            ffmpeg \
+            fonts-dejavu-core \
+            fonts-liberation
+          ffmpeg -version
 
+      # 4. Install Python dependencies
       - name: Install Python packages
-        run: pip install -r requirements.txt
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
 
-      - name: Generate video
+      # 5. Generate the video using the AI services configured in make_video.py
+      - name: Generate AI video
+        id: generate
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
-          YT_API_KEY: ${{ secrets.YT_API_KEY }}      # optional: richer trend data + performance feedback
-          TRENDS: "1"                                # set to "0" to switch trend research off
+
+          # Optional YouTube API key for trend research/performance feedback
+          YT_API_KEY: ${{ secrets.YT_API_KEY }}
+
+          # Enable trend research
+          TRENDS: "1"
+
+          # Video duration settings
           VIDEO_SECONDS: "40-60"
           LONG_SECONDS: "300-420"
-          # CATEGORIES: "space,physics,ocean life"   # uncomment to focus on a niche
-        run: python make_video.py
 
-      - name: Save video as downloadable artifact
-        uses: actions/upload-artifact@v4
+        run: |
+          echo "=================================="
+          echo "Video format: $VIDEO_FORMAT"
+          echo "Categories: ${CATEGORIES:-AI-selected topics}"
+          echo "=================================="
+
+          python make_video.py
+
+      # 6. Save generated videos as downloadable artifacts
+      - name: Save generated videos
+        if: always()
+        uses: actions/upload-artifact@v7
         with:
-          name: video-${{ github.run_number }}-${{ env.VIDEO_FORMAT }}
+          name: videos-${{ github.run_number }}-${{ env.VIDEO_FORMAT }}
           path: Automated-video-creation/output/
           retention-days: 14
+          if-no-files-found: ignore
 
+      # 7. Upload to YouTube
       - name: Upload to YouTube
+        if: steps.generate.outcome == 'success'
         env:
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
           YT_PRIVACY: public
           MAX_UPLOADS_PER_DAY: "5"
-        run: python upload_youtube.py
+        run: |
+          python upload_youtube.py
 
+      # 8. Publish Shorts and Stories to Instagram
       - name: Post to Instagram
-        if: env.VIDEO_FORMAT != 'long'
+        if: steps.generate.outcome == 'success' && env.VIDEO_FORMAT != 'long'
         env:
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
           IG_TOKEN_PASSPHRASE: ${{ secrets.IG_TOKEN_PASSPHRASE }}
+
           CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
           CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
           CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
-          MAX_IG_POSTS_PER_DAY: "4"
-        run: python upload_instagram.py
 
+          MAX_IG_POSTS_PER_DAY: "4"
+        run: |
+          python upload_instagram.py
+
+      # 9. Save generation history and state
       - name: Save history, trends and logs
         if: always()
         run: |
           git config user.name "video-bot"
           git config user.email "video-bot@users.noreply.github.com"
-          git add history.json || true
-          git add state.json || true
-          git add ig_token.enc || true
-          git diff --staged --quiet || (git commit -m "Update history" && git pull --rebase && git push)
+
+          git add history.json state.json ig_token.enc 2>/dev/null || true
+
+          if ! git diff --staged --quiet; then
+            git commit -m "Update video generation history"
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          else
+            echo "No history or state changes to commit."
+          fi

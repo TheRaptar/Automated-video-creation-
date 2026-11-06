@@ -5,12 +5,13 @@
     "the human body",
     "world records"
   ],
-  "last_style": "whatif",
+  "last_style": "fact",
   "uploads": [
     "2026-11-06T08:48:56+00:00",
     "2026-11-06T12:09:20+00:00",
     "2026-11-06T12:26:02+00:00",
-    "2026-11-06T15:00:01+00:00"
+    "2026-11-06T15:00:01+00:00",
+    "2026-11-06T15:35:53+00:00"
   ],
   "trends": {
     "date": "2026-11-06",
@@ -58,7 +59,7 @@
         "format": "short",
         "style": "fact",
         "score": 9.0,
-        "used": false
+        "used": true
       },
       {
         "topic": "Computer Keyboard Firmware and Sticky Keys",
@@ -144,6 +145,15 @@
       "source": "category",
       "title": "Swimming In Your Own Spit \ud83e\udd2f #worldrecord #shorts",
       "ts": "2026-11-06T15:00:01+00:00"
+    },
+    {
+      "id": "bPcaEwMYerA",
+      "fmt": "short",
+      "category": null,
+      "style": "fact",
+      "source": "trend",
+      "title": "Rivers in the Sky Are Real \ud83e\udd2f #AtmosphericRiver #shorts",
+      "ts": "2026-11-06T15:35:53+00:00"
     }
   ]
 }

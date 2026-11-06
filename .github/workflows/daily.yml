@@ -2,11 +2,16 @@ name: Generate daily video
 
 on:
   schedule:
-    - cron: "30 4 * * *"   # every day at 04:30 UTC (10:00 AM India time)
+    - cron: "30 4 * * *"      # 10:00 AM India time
+    # - cron: "30 13 * * *"   # remove the leading "#" for a 2nd video/day (7:00 PM India time)
   workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: video-bot
+  cancel-in-progress: false
 
 defaults:
   run:
@@ -15,7 +20,7 @@ defaults:
 jobs:
   make-video:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
 
@@ -34,9 +39,10 @@ jobs:
       - name: Generate video (random topic)
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          GEMINI_MODEL: gemini-3.8-flash
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+          VIDEO_SECONDS: "55"                 # target length in seconds (try 45-70)
+          # CATEGORIES: "space,physics,ocean life"   # uncomment to focus on a niche
         run: python make_video.py
 
       - name: Save video as downloadable artifact
@@ -51,12 +57,12 @@ jobs:
           git config user.name "video-bot"
           git config user.email "video-bot@users.noreply.github.com"
           git add history.json
-          git diff --staged --quiet || (git commit -m "Update topic history" && git push)
+          git diff --staged --quiet || (git commit -m "Update topic history" && git pull --rebase && git push)
 
       - name: Upload to YouTube
         env:
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
-          YT_PRIVACY: private      # change to public once your API project is approved
+          YT_PRIVACY: public
         run: python upload_youtube.py

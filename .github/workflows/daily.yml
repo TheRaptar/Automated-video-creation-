@@ -1,10 +1,22 @@
-name: Generate daily video
+name: Generate and publish videos
 
+# Weekly plan (all times UTC, India time in brackets):
+#   Short A  every day              04:30 (10:00 AM)
+#   Long     Tue / Thu / Sat        10:30 (04:00 PM)   <- long-form videos
+#   Short B  every day              14:30 (08:00 PM)
+# = 14 Shorts + 3 long videos per week, at least 3.5 hours apart.
 on:
   schedule:
-    - cron: "30 4 * * *"      # 10:00 AM India time
-    # - cron: "30 13 * * *"   # remove the leading "#" for a 2nd video/day (7:00 PM India time)
+    - cron: "30 4 * * *"
+    - cron: "30 10 * * 2,4,6"
+    - cron: "30 14 * * *"
   workflow_dispatch:
+    inputs:
+      format:
+        description: "Which kind of video to make now?"
+        type: choice
+        options: [short, long]
+        default: short
 
 permissions:
   contents: write
@@ -20,7 +32,9 @@ defaults:
 jobs:
   make-video:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 90
+    env:
+      VIDEO_FORMAT: ${{ github.event.inputs.format || (github.event.schedule == '30 10 * * 2,4,6' && 'long' || 'short') }}
     steps:
       - uses: actions/checkout@v4
 
@@ -36,28 +50,22 @@ jobs:
       - name: Install Python packages
         run: pip install -r requirements.txt
 
-      - name: Generate video (random topic)
+      - name: Generate video
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
-          VIDEO_SECONDS: "55"                 # target length in seconds (try 45-70)
+          VIDEO_SECONDS: "40-60"        # Short length range in seconds
+          LONG_SECONDS: "300-420"       # long-form length range in seconds (5-7 minutes)
           # CATEGORIES: "space,physics,ocean life"   # uncomment to focus on a niche
         run: python make_video.py
 
       - name: Save video as downloadable artifact
         uses: actions/upload-artifact@v4
         with:
-          name: video-${{ github.run_number }}
+          name: video-${{ github.run_number }}-${{ env.VIDEO_FORMAT }}
           path: Automated-video-creation/output/
           retention-days: 14
-
-      - name: Remember topic so it is never repeated
-        run: |
-          git config user.name "video-bot"
-          git config user.email "video-bot@users.noreply.github.com"
-          git add history.json
-          git diff --staged --quiet || (git commit -m "Update topic history" && git pull --rebase && git push)
 
       - name: Upload to YouTube
         env:
@@ -65,4 +73,14 @@ jobs:
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
           YT_PRIVACY: public
+          MAX_UPLOADS_PER_DAY: "5"
         run: python upload_youtube.py
+
+      - name: Save topic history and upload log
+        if: always()
+        run: |
+          git config user.name "video-bot"
+          git config user.email "video-bot@users.noreply.github.com"
+          git add history.json || true
+          git add state.json || true
+          git diff --staged --quiet || (git commit -m "Update history" && git pull --rebase && git push)

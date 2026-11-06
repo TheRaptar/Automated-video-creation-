@@ -1,21 +1,22 @@
 name: Generate and publish videos
 
-# Weekly plan (all times UTC, India time in brackets):
-#   Short A  every day              04:30 (10:00 AM)
-#   Long     Tue / Thu / Sat        10:30 (04:00 PM)   <- long-form videos
-#   Short B  every day              14:30 (08:00 PM)
-# = 14 Shorts + 3 long videos per week, at least 3.5 hours apart.
+# Weekly plan (UTC; India time in brackets). Videos go to YouTube, and Shorts/Stories also to Instagram.
+#   Short A  every day        04:30 (10:00 AM)
+#   Long     Tue / Thu / Sat  10:30 (04:00 PM)   long-form, YouTube only
+#   Short B  every day        14:30 (08:00 PM)
+#   Story    Wed / Sun        07:30 (01:00 PM)   experimental illustrated story - remove the # to enable
 on:
   schedule:
     - cron: "30 4 * * *"
     - cron: "30 10 * * 2,4,6"
     - cron: "30 14 * * *"
+    # - cron: "30 7 * * 3,0"
   workflow_dispatch:
     inputs:
       format:
         description: "Which kind of video to make now?"
         type: choice
-        options: [short, long]
+        options: [short, long, story]
         default: short
 
 permissions:
@@ -34,7 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
-      VIDEO_FORMAT: ${{ github.event.inputs.format || (github.event.schedule == '30 10 * * 2,4,6' && 'long' || 'short') }}
+      VIDEO_FORMAT: ${{ github.event.inputs.format || (github.event.schedule == '30 10 * * 2,4,6' && 'long' || (github.event.schedule == '30 7 * * 3,0' && 'story' || 'short')) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -55,8 +56,10 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
-          VIDEO_SECONDS: "40-60"        # Short length range in seconds
-          LONG_SECONDS: "300-420"       # long-form length range in seconds (5-7 minutes)
+          YT_API_KEY: ${{ secrets.YT_API_KEY }}      # optional: richer trend data + performance feedback
+          TRENDS: "1"                                # set to "0" to switch trend research off
+          VIDEO_SECONDS: "40-60"
+          LONG_SECONDS: "300-420"
           # CATEGORIES: "space,physics,ocean life"   # uncomment to focus on a niche
         run: python make_video.py
 
@@ -76,11 +79,23 @@ jobs:
           MAX_UPLOADS_PER_DAY: "5"
         run: python upload_youtube.py
 
-      - name: Save topic history and upload log
+      - name: Post to Instagram
+        if: env.VIDEO_FORMAT != 'long'
+        env:
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_TOKEN_PASSPHRASE: ${{ secrets.IG_TOKEN_PASSPHRASE }}
+          CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
+          CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
+          MAX_IG_POSTS_PER_DAY: "4"
+        run: python upload_instagram.py
+
+      - name: Save history, trends and logs
         if: always()
         run: |
           git config user.name "video-bot"
           git config user.email "video-bot@users.noreply.github.com"
           git add history.json || true
           git add state.json || true
+          git add ig_token.enc || true
           git diff --staged --quiet || (git commit -m "Update history" && git pull --rebase && git push)

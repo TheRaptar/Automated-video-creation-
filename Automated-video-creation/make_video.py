@@ -22,6 +22,7 @@ Output: output/video.mp4, output/metadata.json (and output/thumbnail.jpg for lon
 """
 import argparse
 import asyncio
+import base64
 import json
 import os
 import random
@@ -303,7 +304,8 @@ def _topic_line(topic, history, state, long_form: bool):
         return f"Topic: {topic}", None
     recent = state.get("recent_categories", [])
     keep = recent[-min(4, max(0, len(CATEGORIES) - 1)):] if len(CATEGORIES) > 1 else []
-    category = random.choice([c for c in CATEGORIES if c not in keep] or CATEGORIES)
+    category = weighted_choice([c for c in CATEGORIES if c not in keep] or CATEGORIES,
+                               state.get("weights", {}).get("category", {}))
     avoid = "; ".join(history[-80:]) or "none yet"
     depth = ("a rich topic that supports a ~6 minute documentary-style explanation with a clear story arc"
              if long_form else "a specific, surprising topic (not the most commonly told fact)")
@@ -350,10 +352,16 @@ def generate_short(topic, history, state) -> dict:
             ]})
     lo, words = max(5, total // 9), int(total * 2.6)
     topic_line, category = _topic_line(topic, history, state, False)
-    style_key = random.choice([k for k in STYLES if k != state.get("last_style")] or list(STYLES))
+    hint = state.get("_style_hint")
+    if hint in STYLES:
+        style_key = hint
+    else:
+        style_key = weighted_choice([k for k in STYLES if k != state.get("last_style")] or list(STYLES),
+                                    state.get("weights", {}).get("style", {}))
     prompt = f"""You write scripts for viral, high-retention YouTube Shorts.
 {topic_line}
 Video style: {STYLES[style_key]}
+{_trend_hint(state)}
 
 Return ONLY JSON with this exact shape:
 {{
@@ -462,6 +470,78 @@ Rules:
               "description": outline.get("description", ""), "hashtags": outline.get("hashtags", []),
               "scenes": scenes, "category": category}
     return _normalize(script)
+
+
+# ------------------------------------------------------------ helpers: weighting + trend hints
+def weighted_choice(options: list, weights: dict):
+    """Random pick that favours options whose past videos performed better (weights default to 1)."""
+    return random.choices(options, weights=[max(0.1, float(weights.get(o, 1.0))) for o in options])[0]
+
+
+def _trend_share(state: dict) -> float:
+    """How often to use a trend idea. TREND_SHARE fixes it; otherwise it adapts to what performed better."""
+    if os.environ.get("TREND_SHARE"):
+        return float(os.environ["TREND_SHARE"])
+    w = state.get("weights", {}).get("source", {})
+    if "trend" in w and "category" in w:
+        return min(0.85, max(0.3, w["trend"] / (w["trend"] + w["category"])))
+    return 0.7
+
+
+def _trend_hint(state: dict) -> str:
+    t = state.get("trends") or {}
+    bits = []
+    if t.get("format_trends"):
+        bits.append("formats that currently work: " + "; ".join(t["format_trends"]))
+    if t.get("title_patterns"):
+        bits.append("title patterns: " + "; ".join(t["title_patterns"]))
+    return ("Hints from today's trend research (use only if they fit the topic): " + " | ".join(bits)) if bits else ""
+
+
+def generate_story(topic, history, state) -> dict:
+    """An original illustrated 'animated storybook' Short that teaches one true fact."""
+    total = pick_seconds("VIDEO_SECONDS", "40-60")
+    if OFFLINE:
+        STORY.update(art_style="soft watercolor storybook illustration", characters="a small orange fox in a blue scarf")
+        return _normalize({
+            "topic": "offline story test", "title": "Offline story test", "description": "Testing.",
+            "hashtags": ["#story"], "category": None, "style": "story",
+            "scenes": [{"text": "Once upon a time, a little fox found a glowing stone.", "image_prompt": "fox finds a stone"},
+                       {"text": "It was not magic at all, only a very old crystal reflecting the moon.", "image_prompt": "crystal in moonlight"},
+                       {"text": "And that is how the fox learned to look closer.", "image_prompt": "fox smiling"}]})
+    n_lo = max(7, total // 7)
+    topic_line, category = _topic_line(topic, history, state, False)
+    prompt = f"""You write original short animated-style stories for YouTube Shorts / Instagram Reels (illustrated storybook look).
+{topic_line}
+The story must teach exactly ONE true, well-documented fact or idea, woven naturally into the plot.
+{_trend_hint(state)}
+
+Return ONLY JSON with this exact shape:
+{{
+  "topic": "short name of the topic",
+  "title": "curiosity-driven title under 60 characters",
+  "description": "1-2 sentence description",
+  "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4"],
+  "art_style": "ONE sentence describing a consistent visual style, e.g. soft watercolor storybook illustration, warm colors, rounded friendly shapes",
+  "characters": "one sentence fixing the look of each recurring character (species, colors, clothes)",
+  "scenes": [{{"text": "narration, 1-2 short sentences", "image_prompt": "what the picture shows: action, setting, mood", "search_terms": ["fallback stock query"]}}]
+}}
+Rules:
+- {n_lo} to {n_lo + 2} scenes, about {total} seconds of narration in total.
+- Arc: hook, problem, attempts, twist, resolution with a clear lesson. The last scene invites viewers to follow.
+- ORIGINAL characters only: no existing franchises, no real people, no brands. Kid-safe: no violence, fear or romance.
+- image_prompt must never ask for text, letters, logos or signs inside the picture.
+- Accuracy matters: the real-world fact in the story must be true."""
+    data = llm_json(prompt, rounds=2, valid=lambda d: _valid_scenes(d, 5))
+    if not data:
+        sys.exit("Could not get a story script from Gemini or Groq.")
+    script = _normalize(data)
+    STORY.update(art_style=str(data.get("art_style") or "soft watercolor storybook illustration"),
+                 characters=str(data.get("characters") or ""))
+    for sc in script["scenes"]:
+        sc["image_prompt"] = str(sc.get("image_prompt") or sc["text"])
+    script.update(category=category, style="story")
+    return script
 
 
 # ------------------------------------------------------------ 2. voice
@@ -580,6 +660,114 @@ def make_visual(idx: int, terms: list[str], total: float, used: set) -> Path:
     return out
 
 
+# ------------------------------------------------------------ story format: AI illustrations + Ken Burns motion
+STORY: dict = {"art_style": "", "characters": ""}
+_IMG_DEAD: set = set()
+_IMG_MODELS: list = []
+
+
+def _valid_image(path: Path) -> bool:
+    try:
+        r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                            "stream=width,height", "-of", "csv=p=0", str(path)],
+                           capture_output=True, text=True, timeout=30)
+        w, h = (int(x) for x in r.stdout.strip().split(",")[:2])
+        return w >= 256 and h >= 256
+    except Exception:
+        return False
+
+
+def _gemini_image(prompt: str, dest: Path) -> bool:
+    if not GEMINI_API_KEY or "gemini" in _IMG_DEAD:
+        return False
+    headers = {"x-goog-api-key": GEMINI_API_KEY}
+    if not _IMG_MODELS:
+        try:
+            r = requests.get(f"{GEMINI_BASE}/models", params={"pageSize": 200}, headers=headers, timeout=30)
+            if r.ok:
+                _IMG_MODELS.extend(sorted((m["name"].split("/")[-1] for m in r.json().get("models", [])
+                                           if "image" in m["name"] and "imagen" not in m["name"]
+                                           and "generateContent" in m.get("supportedGenerationMethods", [])),
+                                          reverse=True)[:2])
+        except requests.RequestException:
+            pass
+    body = {"contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"responseModalities": ["TEXT", "IMAGE"]}}
+    for model in _IMG_MODELS:
+        for attempt in range(2):
+            try:
+                r = requests.post(f"{GEMINI_BASE}/models/{model}:generateContent", json=body,
+                                  headers=headers, timeout=120)
+            except requests.RequestException:
+                break
+            if r.ok:
+                for part in r.json().get("candidates", [{}])[0].get("content", {}).get("parts", []):
+                    inline = part.get("inlineData") or part.get("inline_data")
+                    if inline and inline.get("data"):
+                        dest.write_bytes(base64.b64decode(inline["data"]))
+                        return True
+                break
+            if r.status_code == 429 and attempt == 0:
+                time.sleep(20)
+                continue
+            print(f"  image model {model}: HTTP {r.status_code} {r.text[:80].strip()}")
+            if r.status_code in (403, 429):
+                _IMG_DEAD.add("gemini")
+                return False
+            break
+    return False
+
+
+def _pollinations(prompt: str, dest: Path) -> bool:
+    if "pollinations" in _IMG_DEAD:
+        return False
+    from urllib.parse import quote
+    base = os.environ.get("POLLINATIONS_BASE", "https://image.pollinations.ai/prompt/")
+    try:
+        r = requests.get(base + quote(prompt[:800]), timeout=150,
+                         params={"width": 768, "height": 1344, "nologo": "true", "seed": random.randint(1, 99999)})
+        if r.ok and r.headers.get("content-type", "").startswith("image"):
+            dest.write_bytes(r.content)
+            return True
+        print(f"  pollinations: HTTP {r.status_code}")
+        if r.status_code in (401, 402, 403, 429):
+            _IMG_DEAD.add("pollinations")
+    except requests.RequestException as e:
+        print(f"  pollinations: {type(e).__name__}")
+    return False
+
+
+def gen_image(prompt: str, dest: Path) -> bool:
+    if OFFLINE:
+        run(["ffmpeg", "-y", "-f", "lavfi", "-i",
+             f"gradients=s={W}x{H}:c0=0x{random.randint(0x202060, 0x6060c0):06x}:c1=0x{random.randint(0x602020, 0xc06060):06x}"
+             ":duration=1:rate=1", "-frames:v", "1", str(dest)])
+        return True
+    return (_gemini_image(prompt, dest) and _valid_image(dest)) or (_pollinations(prompt, dest) and _valid_image(dest))
+
+
+def make_story_visual(idx: int, sc: dict, total: float):
+    """One AI illustration per scene, animated with a slow zoom or pan. Returns None if no image could be made."""
+    img = WORK / f"img_{idx}.png"
+    prompt = (f"{STORY['art_style']}. {STORY['characters']}. Scene: {sc.get('image_prompt', sc['text'])}. "
+              "Vertical 9:16 composition, no text, no letters, no logos, no watermark.")
+    if not gen_image(prompt, img):
+        return None
+    frames = max(2, int(total * FPS) + 2)
+    mode = idx % 3
+    z = {0: "min(1.0+0.0007*on,1.18)", 1: "max(1.18-0.0007*on,1.0)", 2: "1.12"}[mode]
+    x = {0: "iw/2-(iw/zoom/2)", 1: "iw/2-(iw/zoom/2)", 2: f"(iw-iw/zoom)*on/{frames}"}[mode]
+    out = WORK / f"story_{idx}.mp4"
+    big_w, big_h = int(W * 1.5), int(H * 1.5)
+    run(["ffmpeg", "-y", "-i", str(img), "-vf",
+         f"scale={big_w}:{big_h}:force_original_aspect_ratio=increase,crop={big_w}:{big_h},"
+         f"zoompan=z='{z}':x='{x}':y='ih/2-(ih/zoom/2)':d={frames}:s={W}x{H}:fps={FPS},setsar=1",
+         "-t", f"{total:.2f}", "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+         "-pix_fmt", "yuv420p", str(out)])
+    img.unlink(missing_ok=True)
+    return out
+
+
 def caption_chunks(text: str, duration: float):
     words = text.split()
     groups = [" ".join(words[i:i + WORDS_PER_CAPTION]) for i in range(0, len(words), WORDS_PER_CAPTION)]
@@ -638,7 +826,7 @@ def make_thumbnail(video: Path, title: str, font: str) -> Path:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("topic", nargs="*")
-    ap.add_argument("--format", choices=["short", "long"], default=os.environ.get("VIDEO_FORMAT", "short"))
+    ap.add_argument("--format", choices=["short", "long", "story"], default=os.environ.get("VIDEO_FORMAT", "short"))
     args = ap.parse_args()
     fmt, topic = args.format, " ".join(args.topic).strip() or None
     configure(fmt)
@@ -658,12 +846,30 @@ def main() -> None:
     font = find_font()
     history, state = load_history(), load_state()
 
+    idea = None
+    if not topic and not OFFLINE and os.environ.get("TRENDS", "1") == "1":
+        try:
+            import trends
+            trends.ensure_fresh(state, llm_json, CATEGORIES)
+            save_state(state)
+            if random.random() < _trend_share(state):
+                idea = trends.pick_idea(fmt, state)
+        except Exception as e:
+            print(f"  (trend research skipped: {type(e).__name__}: {e})")
+    if idea:
+        topic = (f"{idea['topic']}. Angle: {idea.get('angle', '')}. (Trending because: "
+                 f"{idea.get('why_trending', '')}. Use the trend only as inspiration for an accurate, evergreen "
+                 "explainer; never present unverified news as fact.)")
+        if idea.get("style") in STYLES:
+            state["_style_hint"] = idea["style"]
+        print(f"    Trend idea picked: {idea['topic']}")
+
     print(f"1/4 Choosing topic and writing the {fmt} script...")
-    script = (generate_long if fmt == "long" else generate_short)(topic, history, state)
+    script = {"short": generate_short, "long": generate_long, "story": generate_story}[fmt](topic, history, state)
     print(f"    Topic: {script['topic']}\n    Title: {script['title']}\n    Scenes: {len(script['scenes'])}")
 
     used: set = set()
-    scenes, chapters, elapsed = [], [], 0.0
+    scenes, chapters, elapsed, img_fail = [], [], 0.0, 0
     for i, sc in enumerate(script["scenes"]):
         if i % 5 == 0 or fmt == "short":
             print(f"2-3/4 Scene {i + 1}/{len(script['scenes'])}: {sc['text'][:55]}")
@@ -671,9 +877,20 @@ def main() -> None:
         dur = make_voice(sc["text"], audio)
         if sc.get("heading"):
             chapters.append((elapsed, sc["heading"]))
-        visual = make_visual(i, sc["search_terms"], dur + 0.25, used)
+        visual = None
+        if fmt == "story":
+            visual = make_story_visual(i, sc, dur + 0.25)
+            if visual is None:
+                img_fail += 1
+                if img_fail >= 3 and img_fail == i + 1:
+                    sys.exit("Image generation is not working (no provider answered) - aborting the story video.")
+        if visual is None:
+            visual = make_visual(i, sc["search_terms"], dur + 0.25, used)
         scenes.append(build_scene(i, sc["text"], visual, audio, dur, font, sc.get("heading")))
         elapsed += dur + 0.25
+
+    if fmt == "story" and img_fail > len(script["scenes"]) * 0.2:
+        sys.exit(f"{img_fail} of {len(script['scenes'])} illustrations failed - not publishing a mismatched story.")
 
     print("4/4 Joining scenes...")
     listfile = WORK / "list.txt"
@@ -690,7 +907,9 @@ def main() -> None:
     desc += "\n\n" + " ".join(script["hashtags"])
     desc += "\n\nNarrated with an AI voice. Stock footage via Pixabay."
     meta = {"format": fmt, "topic": script["topic"], "title": script["title"],
-            "description": desc, "hashtags": script["hashtags"]}
+            "description": desc, "hashtags": script["hashtags"],
+            "category": script.get("category"), "style": script.get("style"),
+            "source": "trend" if idea else "category"}
     (OUT / "metadata.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
     if not OFFLINE:
@@ -699,6 +918,7 @@ def main() -> None:
             state["recent_categories"] = (state.get("recent_categories", []) + [script["category"]])[-10:]
         if script.get("style"):
             state["last_style"] = script["style"]
+        state.pop("_style_hint", None)
         save_state(state)
     print(f"Done! -> {final}  ({fmt_ts(media_duration(final))})")
 

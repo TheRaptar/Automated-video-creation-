@@ -60,7 +60,7 @@ def get_access_token() -> str:
 
 
 def build_body(meta: dict, synthetic: bool) -> dict:
-    is_short = meta.get("format", "short") == "short"
+    is_short = meta.get("format", "short") in ("short", "story")
     desc = meta["description"].strip()
     if is_short:
         title = meta["title"].strip()[:88] + " #Shorts"
@@ -147,7 +147,7 @@ def main() -> None:
                 vid = res["id"]
                 wanted = os.environ.get("YT_PRIVACY", "private")
                 actual = res.get("status", {}).get("privacyStatus", wanted)
-                kind = "Short" if meta.get("format", "short") == "short" else "long-form video"
+                kind = "long-form video" if meta.get("format") == "long" else "Short"
                 summary(f"### YouTube upload done ({kind})\n**{meta['title']}**  \n"
                         f"https://youtube.com/watch?v={vid}  (requested: {wanted}, actual: {actual})")
                 if actual != wanted:
@@ -157,7 +157,11 @@ def main() -> None:
                             "form) or switch videos to public manually in YouTube Studio.")
                 if meta.get("format") == "long":
                     set_thumbnail(token, vid)
-                state["uploads"] = (uploads + [datetime.now(timezone.utc).isoformat(timespec="seconds")])[-40:]
+                now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+                state["uploads"] = (uploads + [now])[-40:]
+                state["videos"] = (state.get("videos", []) + [{
+                    "id": vid, "fmt": meta.get("format", "short"), "category": meta.get("category"),
+                    "style": meta.get("style"), "source": meta.get("source"), "title": meta["title"], "ts": now}])[-150:]
                 STATE.write_text(json.dumps(state, indent=2), encoding="utf-8")
                 return
             print(f"Upload attempt {attempt + 1} failed: {up.status_code} {up.text[:300]}")

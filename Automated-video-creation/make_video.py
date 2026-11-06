@@ -429,4 +429,279 @@ true and widely documented."""
 
     scenes, prev, ok = [], "This is the opening of the video.", 0
     for i, sec in enumerate(sections):
-   
+        print(f"  Writing chapter {i + 1}/{len(sections)}: {sec['heading']}")
+        prompt = f"""You are writing the narration for chapter {i + 1} of {len(sections)}, "{sec['heading']}",
+of a documentary-style YouTube video titled "{title}".
+Full plan:
+{plan}
+
+The previous chapter ended with: "{prev}"
+Write about {per_section} words of narration for THIS chapter only. Return ONLY JSON:
+{{"scenes": [{{"text": "narration", "search_terms": ["visual query 1", "visual query 2", "visual query 3"]}}]}}
+Rules:
+- {max(3, per_section // 30)} to {max(4, per_section // 30) + 2} scenes, each 1-3 sentences and under 40 words.
+- Calm, engaging narrator voice speaking to "you". No greetings, no "in this video" (except in chapter 1),
+  and do not repeat what earlier chapters already said.
+- {"End with a line that pulls the viewer into the next chapter." if i < len(sections) - 1 else "Finish with a satisfying conclusion and one short line inviting viewers to subscribe."}
+- ACCURACY IS CRITICAL: only facts you are highly confident are true. Avoid exact numbers/dates unless certain.
+  Never invent quotes or studies.
+- search_terms: 3 different concrete, filmable stock-footage queries per scene, 1-3 words each. Never abstract
+  words, names or brands."""
+        data = llm_json(prompt, rounds=2, valid=lambda d: _valid_scenes(d, minimum=2))
+        if not data:
+            print(f"  WARNING: chapter '{sec['heading']}' failed - skipping it.")
+            continue
+        texts = _review_texts(title, [s["text"].strip() for s in data["scenes"]])
+        for j, (sc, t) in enumerate(zip(data["scenes"], texts)):
+            scenes.append({"text": t, "search_terms": sc.get("search_terms"),
+                           "heading": sec["heading"].strip() if j == 0 else None})
+        prev, ok = texts[-1], ok + 1
+    if ok < max(4, len(sections) - 2):
+        sys.exit(f"Only {ok} of {len(sections)} chapters could be written - aborting.")
+    script = {"topic": outline.get("topic") or title, "title": title,
+              "description": outline.get("description", ""), "hashtags": outline.get("hashtags", []),
+              "scenes": scenes, "category": category}
+    return _normalize(script)
+
+
+# ------------------------------------------------------------ 2. voice
+async def _tts(text: str, path: Path) -> None:
+    import edge_tts
+    await edge_tts.Communicate(text, TTS_VOICE, rate="+5%").save(str(path))
+
+
+def make_voice(text: str, path: Path) -> float:
+    if OFFLINE:  # silent audio, roughly 0.4s per word
+        secs = max(1.5, 0.4 * len(text.split()))
+        run(["ffmpeg", "-y", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+             "-t", f"{secs:.2f}", "-c:a", "libmp3lame", str(path)])
+        return media_duration(path)
+    for attempt in range(3):
+        try:
+            asyncio.run(_tts(text, path))
+            return media_duration(path)
+        except Exception as e:
+            print(f"TTS attempt {attempt + 1} failed: {e}")
+            time.sleep(3)
+    sys.exit("Voice generation failed (edge-tts).")
+
+
+# ------------------------------------------------------------ 3. footage
+def _download(link: str, dest: Path) -> None:
+    with requests.get(link, stream=True, timeout=180) as resp:
+        resp.raise_for_status()
+        with open(dest, "wb") as fh:
+            for chunk in resp.iter_content(1 << 20):
+                fh.write(chunk)
+
+
+def _pixabay(query: str, dest: Path, used: set) -> bool:
+    if not PIXABAY_API_KEY:
+        return False
+    r = requests.get("https://pixabay.com/api/videos/",
+                     params={"key": PIXABAY_API_KEY, "q": query, "per_page": 20, "safesearch": "true"},
+                     timeout=30)
+    r.raise_for_status()
+    hits = [h for h in r.json().get("hits", []) if h["id"] not in used]
+    if not hits:
+        return False
+    hit = random.choice(hits[:10])
+    for size in SIZE_ORDER:
+        v = hit["videos"].get(size) or {}
+        if v.get("url"):
+            used.add(hit["id"])
+            _download(v["url"], dest)
+            return True
+    return False
+
+
+def _pexels(query: str, dest: Path, used: set) -> bool:
+    if not PEXELS_API_KEY:
+        return False
+    r = requests.get("https://api.pexels.com/videos/search", headers={"Authorization": PEXELS_API_KEY},
+                     params={"query": query, "orientation": ORIENT, "per_page": 15}, timeout=30)
+    r.raise_for_status()
+    vids = [v for v in r.json().get("videos", []) if v["id"] not in used]
+    if not vids:
+        return False
+    video = random.choice(vids[:8])
+    files = [f for f in video["video_files"] if f.get("file_type") == "video/mp4"]
+    files.sort(key=lambda f: abs((f.get("height") or 0) - H))
+    used.add(video["id"])
+    _download(files[0]["link"], dest)
+    return True
+
+
+def _gradient(dest: Path, seconds: float) -> None:
+    """Last-resort background so a video is ALWAYS produced, even if stock search fails."""
+    c0 = "0x%06x" % random.randint(0x101040, 0x4040a0)
+    c1 = "0x%06x" % random.randint(0x300030, 0x802060)
+    run(["ffmpeg", "-y", "-f", "lavfi",
+         "-i", f"gradients=s={W}x{H}:c0={c0}:c1={c1}:duration={seconds:.1f}:speed=0.03:rate={FPS}",
+         "-c:v", "libx264", "-pix_fmt", "yuv420p", str(dest)])
+
+
+def fetch_clip(query: str, dest: Path, used: set, seconds: float) -> None:
+    if not OFFLINE:
+        for q in (query, " ".join(query.split()[:1]), "nature"):
+            for provider in (_pexels, _pixabay):
+                try:
+                    if provider(q, dest, used):
+                        return
+                except Exception as e:
+                    print(f"  {provider.__name__} failed for '{q}': {e}")
+    print(f"  using gradient background for '{query}'")
+    _gradient(dest, seconds + 1)
+
+
+# ------------------------------------------------------------ 4. assembly
+def make_visual(idx: int, terms: list[str], total: float, used: set) -> Path:
+    """Picture track of one scene, built from several short clips (a cut every few seconds)."""
+    n = max(1, min(5, round(total / CLIP_LEN)))
+    seg_len = total / n
+    segs = []
+    for k in range(n):
+        raw = WORK / f"raw_{idx}_{k}.mp4"
+        fetch_clip(terms[k % len(terms)], raw, used, seg_len + 0.5)
+        seg = WORK / f"seg_{idx}_{k}.mp4"
+        run(["ffmpeg", "-y", "-stream_loop", "-1", "-i", str(raw), "-t", f"{seg_len:.2f}",
+             "-vf", f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},setsar=1,fps={FPS}",
+             "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", str(seg)])
+        segs.append(seg)
+        raw.unlink(missing_ok=True)
+    if n == 1:
+        return segs[0]
+    lst = WORK / f"segs_{idx}.txt"
+    lst.write_text("".join(f"file '{s.name}'\n" for s in segs), encoding="utf-8")
+    out = WORK / f"visual_{idx}.mp4"
+    run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(lst), "-c", "copy", str(out)])
+    for s in segs:
+        s.unlink(missing_ok=True)
+    return out
+
+
+def caption_chunks(text: str, duration: float):
+    words = text.split()
+    groups = [" ".join(words[i:i + WORDS_PER_CAPTION]) for i in range(0, len(words), WORDS_PER_CAPTION)]
+    total = sum(len(g) for g in groups) or 1
+    t, out = 0.0, []
+    for g in groups:
+        span = duration * len(g) / total
+        out.append((g, t, t + span))
+        t += span
+    return out
+
+
+def _drawtext(font: str, textfile: Path, style: str, enable: str) -> str:
+    return (f"drawtext=fontfile='{ff_escape(font)}':textfile='{ff_escape(textfile)}':expansion=none"
+            f":{style}:enable='{enable}'")
+
+
+def build_scene(idx: int, text: str, visual: Path, audio: Path, dur: float, font: str, heading=None) -> Path:
+    total = dur + 0.25
+    filters = []
+    if CAPTIONS:                                        # Shorts: big burned-in captions
+        for n, (chunk, start, end) in enumerate(caption_chunks(text, dur)):
+            tf = WORK / f"cap_{idx}_{n}.txt"
+            tf.write_text(chunk.upper(), encoding="utf-8")
+            filters.append(_drawtext(font, tf, "fontsize=78:fontcolor=white:borderw=6:bordercolor=black"
+                                               ":x=(w-text_w)/2:y=h*0.62", f"between(t,{start:.2f},{end:.2f})"))
+    if heading:                                         # long-form: chapter title card for a few seconds
+        tf = WORK / f"head_{idx}.txt"
+        tf.write_text(heading, encoding="utf-8")
+        filters.append(_drawtext(font, tf, "fontsize=56:fontcolor=white:box=1:boxcolor=black@0.6"
+                                           ":boxborderw=24:x=80:y=80", "between(t,0,3.5)"))
+    out = WORK / f"scene_{idx}.mp4"
+    run(["ffmpeg", "-y", "-stream_loop", "-1", "-i", str(visual), "-i", str(audio),
+         "-t", f"{total:.2f}", "-vf", ",".join(filters) or "null", "-af", "apad",
+         "-map", "0:v:0", "-map", "1:a:0",
+         "-c:v", "libx264", "-preset", "veryfast", "-crf", "22", "-pix_fmt", "yuv420p",
+         "-c:a", "aac", "-ar", "44100", "-ac", "2", str(out)])
+    return out
+
+
+def make_thumbnail(video: Path, title: str, font: str) -> Path:
+    """1280x720 thumbnail: a frame from the video, darkened, with the title in big yellow letters."""
+    lines = textwrap.wrap(title.upper(), width=16)[:3]
+    tf = WORK / "thumb.txt"
+    tf.write_text("\n".join(lines), encoding="utf-8")
+    vf = ("scale=1280:720,eq=brightness=-0.10:saturation=1.35,"
+          "drawbox=x=0:y=ih*0.45:w=iw:h=ih*0.55:color=black@0.55:t=fill,"
+          f"drawtext=fontfile='{ff_escape(font)}':textfile='{ff_escape(tf)}':expansion=none"
+          ":fontsize=96:fontcolor=yellow:borderw=7:bordercolor=black:line_spacing=12:x=60:y=h*0.5")
+    out = OUT / "thumbnail.jpg"
+    run(["ffmpeg", "-y", "-ss", f"{media_duration(video) * 0.3:.2f}", "-i", str(video),
+         "-frames:v", "1", "-vf", vf, "-q:v", "3", str(out)])
+    return out
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("topic", nargs="*")
+    ap.add_argument("--format", choices=["short", "long"], default=os.environ.get("VIDEO_FORMAT", "short"))
+    args = ap.parse_args()
+    fmt, topic = args.format, " ".join(args.topic).strip() or None
+    configure(fmt)
+
+    if not OFFLINE and not (GEMINI_API_KEY or GROQ_API_KEY):
+        sys.exit("Missing GEMINI_API_KEY (and/or GROQ_API_KEY).")
+    if not OFFLINE and not (PIXABAY_API_KEY or PEXELS_API_KEY):
+        print("WARNING: no PIXABAY_API_KEY set - videos will use plain gradient backgrounds.")
+    if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
+        sys.exit("FFmpeg not found.")
+
+    shutil.rmtree(WORK, ignore_errors=True)
+    WORK.mkdir()
+    OUT.mkdir(exist_ok=True)
+    for stale in ("thumbnail.jpg", "video.mp4", "metadata.json"):
+        (OUT / stale).unlink(missing_ok=True)
+    font = find_font()
+    history, state = load_history(), load_state()
+
+    print(f"1/4 Choosing topic and writing the {fmt} script...")
+    script = (generate_long if fmt == "long" else generate_short)(topic, history, state)
+    print(f"    Topic: {script['topic']}\n    Title: {script['title']}\n    Scenes: {len(script['scenes'])}")
+
+    used: set = set()
+    scenes, chapters, elapsed = [], [], 0.0
+    for i, sc in enumerate(script["scenes"]):
+        if i % 5 == 0 or fmt == "short":
+            print(f"2-3/4 Scene {i + 1}/{len(script['scenes'])}: {sc['text'][:55]}")
+        audio = WORK / f"voice_{i}.mp3"
+        dur = make_voice(sc["text"], audio)
+        if sc.get("heading"):
+            chapters.append((elapsed, sc["heading"]))
+        visual = make_visual(i, sc["search_terms"], dur + 0.25, used)
+        scenes.append(build_scene(i, sc["text"], visual, audio, dur, font, sc.get("heading")))
+        elapsed += dur + 0.25
+
+    print("4/4 Joining scenes...")
+    listfile = WORK / "list.txt"
+    listfile.write_text("".join(f"file '{s.name}'\n" for s in scenes), encoding="utf-8")
+    final = OUT / "video.mp4"
+    run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(listfile),
+         "-c", "copy", "-movflags", "+faststart", str(final)])
+
+    desc = script["description"].strip()
+    if fmt == "long":
+        if len(chapters) >= 3 and chapters[0][0] == 0:
+            desc += "\n\nChapters:\n" + "\n".join(f"{fmt_ts(t)} {h}" for t, h in chapters)
+        make_thumbnail(final, script["title"], font)
+    desc += "\n\n" + " ".join(script["hashtags"])
+    desc += "\n\nNarrated with an AI voice. Stock footage via Pixabay."
+    meta = {"format": fmt, "topic": script["topic"], "title": script["title"],
+            "description": desc, "hashtags": script["hashtags"]}
+    (OUT / "metadata.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
+
+    if not OFFLINE:
+        save_history(history + [script["topic"]])
+        if script.get("category"):
+            state["recent_categories"] = (state.get("recent_categories", []) + [script["category"]])[-10:]
+        if script.get("style"):
+            state["last_style"] = script["style"]
+        save_state(state)
+    print(f"Done! -> {final}  ({fmt_ts(media_duration(final))})")
+
+
+if __name__ == "__main__":
+    main()

@@ -46,12 +46,17 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 PIXABAY_API_KEY = os.environ.get("PIXABAY_API_KEY", "")
 PEXELS_API_KEY = os.environ.get("PEXELS_API_KEY", "")  # optional (Pexels paused new keys)
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-flash-latest")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
 GEMINI_BASE = os.environ.get("GEMINI_BASE", "https://generativelanguage.googleapis.com/v1beta")
 GROQ_BASE = os.environ.get("GROQ_BASE", "https://api.groq.com/openai/v1")
 TTS_VOICE = os.environ.get("TTS_VOICE", "en-US-GuyNeural")
 REVIEW = os.environ.get("REVIEW_SCRIPT", "1") == "1"
+
+try:
+    from raptar_agent import RaptarAgent
+except ImportError:
+    RaptarAgent = None
 
 WORK, OUT, HISTORY, STATE = Path("work"), Path("output"), Path("history.json"), Path("state.json")
 FPS = 30
@@ -108,15 +113,36 @@ STYLES = {
 FONT_CANDIDATES = [
     os.environ.get("FONT_PATH", ""),
     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+    "/usr/share/fonts/truetype/jetbrains-mono/JetBrainsMono-Bold.ttf",
     "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
     "C:/Windows/Fonts/arialbd.ttf",
 ]
+
+
+def report_status(stage: str, progress: int, message: str, details: dict = None) -> None:
+    """Emits live agent telemetry to agent_status.json for dashboard monitoring."""
+    try:
+        data = {
+            "stage": stage,
+            "progress": progress,
+            "message": message,
+            "timestamp": time.time(),
+            "details": details or {},
+        }
+        Path("agent_status.json").write_text(json.dumps(data, indent=2), encoding="utf-8")
+    except Exception:
+        pass
 
 
 def find_font() -> str:
     for p in FONT_CANDIDATES:
         if p and Path(p).exists():
             return p
+    # Fallback to any TTF found in /usr/share/fonts
+    for fallback in Path("/usr/share/fonts").glob("**/*.ttf"):
+        if "Bold" in fallback.name or "Sans" in fallback.name:
+            return str(fallback)
     sys.exit("No font found. Set FONT_PATH to a .ttf file.")
 
 
@@ -866,6 +892,11 @@ def main() -> None:
 
     print(f"1/4 Choosing topic and writing the {fmt} script...")
     script = {"short": generate_short, "long": generate_long, "story": generate_story}[fmt](topic, history, state)
+    if RaptarAgent and not OFFLINE:
+        try:
+            script = RaptarAgent().audit_and_fact_check(script)
+        except Exception as e:
+            print(f"  (agent audit pass skipped: {e})")
     print(f"    Topic: {script['topic']}\n    Title: {script['title']}\n    Scenes: {len(script['scenes'])}")
 
     used: set = set()

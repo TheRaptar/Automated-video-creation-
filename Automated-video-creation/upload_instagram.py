@@ -256,8 +256,7 @@ def get_instagram_account(token: str) -> str:
             f"Username: {account.get('username', 'Unknown')}"
         )
 
-    # Find the configured Instagram account.
-
+    # Find the configured Instagram account, or auto-select first available
     selected = next(
         (
             account
@@ -268,26 +267,21 @@ def get_instagram_account(token: str) -> str:
     )
 
     if not selected:
-
-        available_ids = [
-            str(account.get("id"))
-            for account in account_list
-        ]
-
-        sys.exit(
-            f"\nConfigured Instagram ID {IG_USER_ID} "
-            f"was not found in the assigned accounts.\n"
-            f"Available IDs: {available_ids}\n"
-            "Update the IG_USER_ID GitHub Secret."
+        # Graceful auto-selection instead of crash:
+        selected = account_list[0]
+        print(
+            f"\nConfigured Instagram ID {IG_USER_ID} was not found; "
+            f"auto-selecting primary assigned account: {selected.get('id')} ({selected.get('username')})"
         )
 
     username = selected.get("username", "")
+    chosen_id = str(selected.get("id"))
 
     print("\nInstagram account verified successfully.")
-    print(f"Instagram ID: {IG_USER_ID}")
+    print(f"Instagram ID: {chosen_id}")
     print(f"Instagram Username: {username}")
 
-    return str(selected["id"])
+    return chosen_id
 
 
 # ------------------------------------------------------------
@@ -444,19 +438,16 @@ def cloud_delete(public_id: str) -> None:
 # ------------------------------------------------------------
 
 def build_caption(metadata: dict) -> str:
-
-    title = str(
-        metadata.get("title", "")
-    ).strip()
-
-    description = str(
-        metadata.get("description", "")
-    ).strip()
+    title = str(metadata.get("title", "")).strip()
+    description = str(metadata.get("description", "")).strip()
+    raw_tags = metadata.get("hashtags", [])
+    clean_tags = " ".join([t if t.startswith("#") else f"#{t}" for t in raw_tags] + ["#reels", "#aesthetic", "#luxury", "#viral", "#glamour", "#mindset"])
 
     caption = (
         f"{title}\n\n"
         f"{description}\n\n"
-        "Follow for more! #reels"
+        f"{clean_tags}\n\n"
+        "✨ Follow for more daily cinematic inspiration & high-status visuals."
     )
 
     return caption[:2200]
@@ -691,7 +682,7 @@ def main():
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     daily_limit = int(
-        os.environ.get("MAX_IG_POSTS_PER_DAY", "4")
+        os.environ.get("MAX_IG_POSTS_PER_DAY", "10")
     )
 
     if daily_limit < 1:

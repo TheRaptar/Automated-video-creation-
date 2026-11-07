@@ -1,0 +1,47 @@
+# Node & Build Outputs
+node_modules/
+build/
+dist/
+coverage/
+bun.lockb
+
+# Environment & Credentials (NEVER COMMIT)
+.env
+.env.local
+.env.*.local
+*.enc
+ig_token.enc
+client_secret*.json
+token.json
+credentials.json
+!.env.example
+
+# Temporary Video Pipeline Work & Binary Outputs
+Automated-video-creation/work/
+Automated-video-creation/output/*.mp4
+Automated-video-creation/output/*.jpg
+Automated-video-creation/archive/
+test_work/
+*.mp4
+*.m4v
+*.mov
+*.wav
+
+# Python Caches & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+*.egg-info/
+.venv/
+env/
+venv/
+
+# OS & Logs
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+

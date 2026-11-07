@@ -108,15 +108,36 @@ STYLES = {
 FONT_CANDIDATES = [
     os.environ.get("FONT_PATH", ""),
     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+    "/usr/share/fonts/truetype/jetbrains-mono/JetBrainsMono-Bold.ttf",
     "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
     "C:/Windows/Fonts/arialbd.ttf",
 ]
+
+
+def report_status(stage: str, progress: int, message: str, details: dict = None) -> None:
+    """Emits live agent telemetry to agent_status.json for dashboard monitoring."""
+    try:
+        data = {
+            "stage": stage,
+            "progress": progress,
+            "message": message,
+            "timestamp": time.time(),
+            "details": details or {},
+        }
+        Path("agent_status.json").write_text(json.dumps(data, indent=2), encoding="utf-8")
+    except Exception:
+        pass
 
 
 def find_font() -> str:
     for p in FONT_CANDIDATES:
         if p and Path(p).exists():
             return p
+    # Fallback to any TTF found in /usr/share/fonts
+    for fallback in Path("/usr/share/fonts").glob("**/*.ttf"):
+        if "Bold" in fallback.name or "Sans" in fallback.name:
+            return str(fallback)
     sys.exit("No font found. Set FONT_PATH to a .ttf file.")
 
 

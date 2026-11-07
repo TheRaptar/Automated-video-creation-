@@ -1,6 +1,0 @@
-{
-  "name": "RAPTAR - Autonomous AI Video & Social Media Automation",
-  "description": "Intelligent autonomous AI agent that researches trends, scripts, generates videos, narrates, and auto-publishes to YouTube and Instagram with continuous memory.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}

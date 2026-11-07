@@ -269,6 +269,43 @@ def test_performance_weights():
     trends.update_performance(state)
     return {"handled_safely": True}
 
+# -------------------------------------------------------------
+# 7. RaptarAgent Task-Oriented AI Engine Verification
+# -------------------------------------------------------------
+@test("7.1 RaptarAgent Task-Oriented Capabilities")
+def test_raptar_agent_engine():
+    from raptar_agent import RaptarAgent
+    agent = RaptarAgent(script_dir=SCRIPT_DIR)
+    
+    # 1. Test memory reading
+    hist = agent.load_history()
+    state = agent.load_state()
+    assert isinstance(hist, list), "Agent history should be a list"
+    assert isinstance(state, dict), "Agent state should be a dict"
+    
+    # 2. Test topic formulation & weighted choice
+    topic_info = agent.evaluate_and_pick_topic({}, ["space and astronomy", "weird science"], format_type="short")
+    assert "topic" in topic_info and "title" in topic_info, "Topic formulation failed schema"
+    assert topic_info["style"] in ["fact", "myth", "how", "top3", "story", "whatif"], "Invalid style assigned"
+    
+    # 3. Test script planning
+    script = agent.plan_script(topic_info, format_type="short")
+    assert "scenes" in script and len(script["scenes"]) >= 3, "Script planning failed scene minimum"
+    assert "search_terms" in script["scenes"][0], "Visual search terms missing from scene 1"
+    
+    # 4. Test fact-check audit
+    audited = agent.audit_and_fact_check(script)
+    assert len(audited["scenes"]) == len(script["scenes"]), "Fact check altered scene count"
+    
+    # 5. Test feedback loop
+    agent.update_feedback_weights()
+    return {
+        "topic": topic_info["topic"],
+        "scenes_planned": len(script["scenes"]),
+        "fact_checked": True,
+        "self_learning": True,
+    }
+
 if __name__ == "__main__":
     print("=====================================================")
     print("        RAPTAR TECHNICAL VERIFICATION SUITE         ")
@@ -283,6 +320,7 @@ if __name__ == "__main__":
     test_youtube_logic()
     test_instagram_logic()
     test_performance_weights()
+    test_raptar_agent_engine()
     
     print("\n=====================================================")
     print("                   TEST SUMMARY                      ")

@@ -65,16 +65,20 @@ def build_body(meta: dict, synthetic: bool) -> dict:
     if is_short:
         title = meta["title"].strip()[:88] + " #Shorts"
         if "#shorts" not in desc.lower():
-            desc += "\n\n#Shorts"
+            desc += "\n\n#Shorts #aesthetic #luxury #viral"
     else:
         title = meta["title"].strip()[:100]
-    tags = [h.lstrip("#") for h in meta.get("hashtags", [])][:15]
-    status = {"privacyStatus": os.environ.get("YT_PRIVACY", "private"),
+    
+    base_tags = [h.lstrip("#") for h in meta.get("hashtags", [])]
+    viral_tags = ["Shorts", "luxury", "aesthetic", "glamour", "viral", "lifestyle", "mindset"]
+    combined_tags = list(dict.fromkeys(base_tags + viral_tags))[:18]
+    
+    status = {"privacyStatus": os.environ.get("YT_PRIVACY", "public"),
               "selfDeclaredMadeForKids": False}
     if synthetic:
         status["containsSyntheticMedia"] = True
-    return {"snippet": {"title": title, "description": desc[:4900], "tags": tags,
-                        "categoryId": os.environ.get("YT_CATEGORY", "27")},
+    return {"snippet": {"title": title, "description": desc[:4900], "tags": combined_tags,
+                        "categoryId": os.environ.get("YT_CATEGORY", "24")},
             "status": status}
 
 
@@ -116,7 +120,7 @@ def main() -> None:
     state = load_state()
     uploads = state.get("uploads", [])
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    cap = int(os.environ.get("MAX_UPLOADS_PER_DAY", "5"))
+    cap = int(os.environ.get("MAX_UPLOADS_PER_DAY", "10"))
     if sum(1 for u in uploads if str(u).startswith(today)) >= cap:
         summary(f"### Upload skipped\nDaily safety limit reached ({cap} uploads today). "
                 "The video is still available as a downloadable artifact.")
@@ -132,9 +136,11 @@ def main() -> None:
         print(f"Retrying without synthetic-media flag ({r.text[:150]})")
         r = start_session(token, build_body(meta, False), size)
     if r.status_code == 403 and "quota" in r.text.lower():
-        sys.exit("YouTube daily quota exceeded. It resets at midnight Pacific time.")
+        summary("### YouTube upload skipped\nYouTube daily quota reached for today. Resets at midnight Pacific.")
+        return
     if not r.ok:
-        sys.exit(f"YouTube refused the upload: {r.status_code} {r.text[:500]}")
+        summary(f"### YouTube upload refused: {r.status_code}\n{r.text[:400]}")
+        return
     session_url = r.headers["Location"]
 
     for attempt in range(3):

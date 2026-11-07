@@ -91,23 +91,27 @@ def pick_seconds(env_name: str, default: str) -> int:
 
 
 DEFAULT_CATEGORIES = [
-    "space and astronomy", "ocean and sea creatures", "the human body", "animal behavior",
-    "ancient history", "psychology and human behavior", "weird science", "famous inventions",
-    "geography and strange places", "food science", "money and personal finance habits",
-    "technology and the internet", "unsolved mysteries", "nature and weather",
-    "productivity and study tips", "languages and words", "world records",
-    "dinosaurs and prehistoric life",
+    "ultra luxury lifestyle",
+    "magnetic aesthetics & high status",
+    "cyberpunk & futuristic elegance",
+    "elite mindset & wealth psychology",
+    "visual spectacles & glamorous wonders",
+    "haute horlogerie & supercar design",
+    "architectural masterpieces & penthouses",
+    "rare gemstones & luxury treasures",
+    "quiet luxury & high-fashion secrets",
 ]
 CATEGORIES = [c.strip() for c in os.environ.get("CATEGORIES", "").split(",") if c.strip()] or DEFAULT_CATEGORIES
 
-# Rotating Short formats give variety without changing the channel's identity.
+# High-engagement viral Short styles:
 STYLES = {
-    "fact": "Mind-blowing fact: open with the most surprising fact, then explain why it is true.",
-    "myth": "Myth vs reality: name a popular misconception, then reveal what is actually true.",
-    "how": "How it really works: explain one mechanism step by step in simple words.",
-    "top3": "Top 3: three surprising things about the topic, saving the best for last.",
-    "story": "Mini-story: tell a short true story or timeline with a twist at the end.",
-    "whatif": "What if: a grounded, science-based 'what would happen if' scenario.",
+    "glamour": "Ultra-glamorous showcase: high-status visual allure, quiet luxury, and mesmerizing aesthetic presence.",
+    "mystery": "Exclusive mystery: an unspoken secret, hidden world, or psychological rule of the top 0.01%.",
+    "aesthetic": "Hypnotic sensory aesthetic: golden hour / neon cyberpunk cinematography with elegant pacing.",
+    "mindset": "Elite power mindset: high-impact ambition, focus discipline, and magnetic psychological laws.",
+    "spectacle": "Awe-inspiring spectacle: hypercars, megayachts, futuristic superstructures, or rare celestial luxury.",
+    "story": "Cinematic mini-story: a gripping journey of ambition, mastery, or extreme refinement with a powerful twist.",
+    "fact": "Fascinating high-status discovery: an extraordinary revelation about the world or human achievement.",
 }
 
 FONT_CANDIDATES = [
@@ -384,7 +388,8 @@ def generate_short(topic, history, state) -> dict:
     else:
         style_key = weighted_choice([k for k in STYLES if k != state.get("last_style")] or list(STYLES),
                                     state.get("weights", {}).get("style", {}))
-    prompt = f"""You write scripts for viral, high-retention YouTube Shorts.
+    prompt = f"""You write scripts for viral, glamorous, ultra-stylish YouTube Shorts and Instagram Reels.
+Channel Theme: High-status aesthetics, luxury lifestyle, quiet elegance, magnetic psychology, and visual allure.
 {topic_line}
 Video style: {STYLES[style_key]}
 {_trend_hint(state)}
@@ -392,21 +397,19 @@ Video style: {STYLES[style_key]}
 Return ONLY JSON with this exact shape:
 {{
   "topic": "short name of the chosen topic",
-  "title": "curiosity-driven title under 60 characters, honest (no false clickbait)",
-  "description": "1-2 sentence description",
-  "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4"],
-  "scenes": [{{"text": "narration for this scene", "search_terms": ["visual query 1", "visual query 2"]}}]
+  "title": "high-CTR curiosity title under 65 characters with emoji",
+  "description": "Engaging 1-2 sentence description",
+  "hashtags": ["#luxury", "#aesthetic", "#lifestyle", "#viral", "#glamour", "#mindset"],
+  "scenes": [{{"text": "narration for this scene", "search_terms": ["cinematic visual query 1", "cinematic visual query 2"]}}]
 }}
 Rules:
-- {lo} to {lo + 3} scenes, about {total} seconds in total (roughly {words} words of narration).
-- Each scene: 1-2 short, punchy sentences, under 25 words. Conversational, speak to "you". No filler.
-- Scene 1 is a hook that creates curiosity in the first 3 seconds. Do NOT start with "Did you know" or "Imagine".
-- Build a small mystery: tease, explain step by step, then a satisfying payoff in the last scenes.
-- The last scene ends with one short line inviting people to follow for more.
-- ACCURACY IS CRITICAL: only state facts you are highly confident are true and widely documented.
-  Avoid exact numbers, dates and statistics unless you are certain. Never invent quotes or studies.
-- search_terms: 2 DIFFERENT concrete, filmable stock-footage queries per scene, 1-3 words each
-  (e.g. "ocean waves", "microscope lab", "city timelapse"). Never abstract words, names or brands."""
+- {lo} to {lo + 2} scenes, about {total} seconds in total (roughly {int(words * 0.9)} words of narration).
+- Each scene: 1-2 punchy, rhythmic, elegant sentences (under 20 words). Speak directly to "you" with confidence and sophistication. No fluff.
+- Scene 1 is an INSTANT scroll-stopping hook under 12 words that triggers high curiosity or status gap. Do NOT start with "Did you know" or "Imagine".
+- Provide an intriguing perspective with a satisfying, memorable payoff in the final scenes.
+- The last scene ends with a smooth line inviting viewers to follow for daily aesthetic inspiration.
+- search_terms: 2 DIFFERENT concrete, cinematic stock-footage queries per scene targeting luxury, beauty, and sleek visual aesthetics
+  (e.g. "luxury penthouse sunset", "supercar night drive slow motion", "monaco yacht harbor", "fashion model runway", "diamond watch macro"). Never abstract words, names, or brands."""
     data = llm_json(prompt, rounds=2, valid=_valid_scenes)
     if not data:
         sys.exit("Could not get a script from Gemini or Groq (services busy or keys invalid).")
@@ -814,12 +817,15 @@ def _drawtext(font: str, textfile: Path, style: str, enable: str) -> str:
 def build_scene(idx: int, text: str, visual: Path, audio: Path, dur: float, font: str, heading=None) -> Path:
     total = dur + 0.25
     filters = []
-    if CAPTIONS:                                        # Shorts: big burned-in captions
+    if CAPTIONS:                                        # Shorts: high-energy kinetic typography
         for n, (chunk, start, end) in enumerate(caption_chunks(text, dur)):
             tf = WORK / f"cap_{idx}_{n}.txt"
             tf.write_text(chunk.upper(), encoding="utf-8")
-            filters.append(_drawtext(font, tf, "fontsize=78:fontcolor=white:borderw=6:bordercolor=black"
-                                               ":x=(w-text_w)/2:y=h*0.62", f"between(t,{start:.2f},{end:.2f})"))
+            # Alternating Electric Gold (0xFFD700) and Diamond White for high viral engagement
+            color = "0xFFD700" if n % 2 == 1 else "white"
+            filters.append(_drawtext(font, tf, f"fontsize=82:fontcolor={color}:borderw=7:bordercolor=black"
+                                               f":shadowx=3:shadowy=3:shadowcolor=black@0.85"
+                                               f":x=(w-text_w)/2:y=h*0.58", f"between(t,{start:.2f},{end:.2f})"))
     if heading:                                         # long-form: chapter title card for a few seconds
         tf = WORK / f"head_{idx}.txt"
         tf.write_text(heading, encoding="utf-8")

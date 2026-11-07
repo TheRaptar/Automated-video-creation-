@@ -158,103 +158,128 @@ class RaptarAgent:
     # ---------------------------------------------------------
     # Capability 1: Trend Evaluation & Topic Formulation
     # ---------------------------------------------------------
+    # ---------------------------------------------------------
+    # Capability 1: Trend Evaluation & Topic Formulation (Glamour, Luxury & Viral Aesthetics)
+    # ---------------------------------------------------------
     def evaluate_and_pick_topic(
         self,
         signals: Dict[str, Any],
         categories: List[str],
         format_type: str = "short",
     ) -> Dict[str, Any]:
-        """Evaluates trend signals and selects an evergreen, high-retention video topic."""
+        """Evaluates trend signals and selects high-virality, glamorous, and stylish video topics."""
         history = self.load_history()
         state = self.load_state()
 
+        glamorous_default_niches = [
+            "ultra luxury lifestyle",
+            "magnetic aesthetics & high status",
+            "cyberpunk & futuristic elegance",
+            "elite mindset & wealth psychology",
+            "visual spectacles & glamorous wonders",
+            "haute horlogerie & supercar design",
+        ]
+        active_categories = categories or glamorous_default_niches
+
         weights = state.get("weights", {})
         recent_cats = state.get("recent_categories", [])[-4:]
-        available_cats = [c for c in categories if c not in recent_cats] or categories
+        available_cats = [c for c in active_categories if c not in recent_cats] or active_categories
 
-        # Weight-proportional category selection
+        # Weight-proportional category selection favoring high-engagement viral niches
         cat_weights = weights.get("category", {})
         category = self.weighted_choice(available_cats, cat_weights)
 
         # Build prompt for Gemini Agent
         avoid_topics = "; ".join(history[-60:]) if history else "none"
-        prompt = f"""You are the autonomous Trend Analyst and Content Strategist for an educational YouTube Shorts and Instagram Reels channel.
-Niches: {', '.join(categories)}.
+        prompt = f"""You are the lead Creative Director, Trend Strategist, and Viral Hook Architect for a viral YouTube Shorts and Instagram Reels brand.
+Channel Identity: Glamorous, ultra-stylish, visually stunning, high-status aesthetics and magnetic psychological curiosity.
+Audience: Millions of viewers seeking aesthetic visual satisfaction, luxury lifestyle, elite allure, and hypnotic storytelling.
 Target Category: {category}
-Target Video Format: {format_type} (short: 45-60s fast-paced, story: 60-75s narrative, long: 5-7 min documentary)
+Target Video Format: {format_type} (short: 30-50s fast-paced viral Short, story: 45-60s cinematic narrative, long: 5-7 min luxury documentary)
 
-Do NOT reuse or closely resemble any of these recent topics:
+Avoid repeating or closely resembling any of these recent topics:
 {avoid_topics}
 
-Analyze current audience curiosity and formulate ONE original, mind-blowing explainer video idea.
-Requirements:
-1. Must be scientifically accurate, factual, and evergreen (e.g. "how deep sea animals survive pressure", "why diamonds rain on Neptune").
-2. NEVER include living celebrities, politics, war, crime, deaths, medical advice, unverified gossip, or disaster news.
-3. Open with a powerful 2-second hook that challenges a common belief or asks a gripping question.
+Formulate ONE original, irresistible, high-virality video concept.
+Core Themes to Draw From:
+- Ultra-Luxury Lifestyle: Billionaire penthouses in Monaco or Manhattan, bespoke supercars, mega yachts, private aviation, quiet luxury.
+- Magnetic Allure & Social Psychology: The subtle art of magnetic charisma, unspoken body language of high-status figures, aura, silent elegance.
+- Futuristic Elegance & Cyber Glamour: Sleek neon cyberpunk aesthetics, hyper-tech design, golden hour architecture, glowing midnight skylines.
+- Elite Mindset & Ambition: Psychological triggers of extreme success, focus discipline, unstoppable confidence.
+- Visual Spectacles: Mesmerizing gems, aesthetic design marvels, breathtaking world landscapes.
+
+Rules:
+1. Scene 1 hook MUST stop the scroll in under 1.5 seconds with high curiosity and status (e.g. "The silent rule the top 0.01% never break...", "Why elegance is the ultimate psychological weapon...").
+2. NEVER use boring dry encyclopedia openings like "Did you know that in 1902..." or "Scientists discovered...".
+3. Keep it ethical, aspirational, captivating, and safe (no hate speech, real tragedies, or political drama).
 
 Return ONLY JSON:
 {{
   "topic": "precise topic name",
-  "title": "catchy, curiosity-inducing title under 80 characters",
-  "angle": "the surprising perspective or mystery",
-  "style": "fact" | "myth" | "how" | "top3" | "story" | "whatif",
+  "title": "high-CTR curiosity title under 75 characters with emoji",
+  "angle": "the irresistible perspective or luxury mystery",
+  "style": "glamour" | "mystery" | "aesthetic" | "mindset" | "spectacle",
   "category": "{category}",
-  "virality_score": 8.5
+  "virality_score": 9.4
 }}"""
 
         validator = lambda d: isinstance(d, dict) and bool(d.get("topic")) and bool(d.get("title"))
         data = self.reason_json(prompt, validator, rounds=2)
 
         if not data:
-            # Resilient fallback topic generator
+            # Resilient glamorous fallback topic generator
             fallback_topics = [
-                ("The Meissner Effect and Quantum Levitation", "Why Magnets Float Above Superconductors", "how", "weird science"),
-                ("Deep Sea Hydrothermal Vents", "Creatures That Live on Toxic Volcanic Vents", "fact", "ocean and sea creatures"),
-                ("Tardigrade Cryptobiosis", "The Microscopic Animals That Survive the Vacuum of Space", "whatif", "animal behavior"),
-                ("Atmospheric Rivers", "Invisible Rivers in the Sky Carrying Millions of Tons of Water", "fact", "nature and weather"),
+                ("The Unspoken Rules of Quiet Luxury", "The Silent Rule The Top 0.01% Never Break ✨", "glamour", "ultra luxury lifestyle"),
+                ("The Psychology of Magnetic Presence", "Why True Elegance Is An Unbeatable Weapon ⚡", "aesthetic", "magnetic aesthetics & high status"),
+                ("Inside The $200M Secret Superyachts", "Inside The Megayachts Hidden From Public Maps 🛥️", "mystery", "ultra luxury lifestyle"),
+                ("The Midnight Cyberpunk Architecture of Tokyo", "The Futuristic Metropolis You Won't Believe Exists 🌆", "spectacle", "cyberpunk & futuristic elegance"),
+                ("The Billionaire Focus Discipline", "How The Elite Master Their Dopamine & Ambition 👑", "mindset", "elite mindset & wealth psychology"),
             ]
             pick = random.choice(fallback_topics)
             data = {
                 "topic": pick[0],
                 "title": pick[1],
-                "angle": "Explaining the hidden mechanics of a real natural phenomenon.",
+                "angle": "Exploring the magnetic, high-status psychology and visual allure behind extreme elegance.",
                 "style": pick[2],
                 "category": pick[3],
-                "virality_score": 8.0,
+                "virality_score": 9.2,
             }
 
         return data
 
     # ---------------------------------------------------------
-    # Capability 2: Scene-by-Scene Script Generation
+    # Capability 2: Scene-by-Scene Script Generation (Cinematic & Punchy)
     # ---------------------------------------------------------
     def plan_script(self, topic_info: Dict[str, Any], format_type: str = "short") -> Dict[str, Any]:
         """Generates a complete scene-by-scene script with visual queries and narration."""
-        num_scenes = 4 if format_type == "short" else (6 if format_type == "story" else 15)
+        num_scenes = 4 if format_type == "short" else (6 if format_type == "story" else 12)
 
-        prompt = f"""You are the lead screenwriter for an educational video.
+        prompt = f"""You are the world-class screenwriter for a viral, glamorous Short/Reel.
 Topic: {topic_info['topic']}
 Title: {topic_info['title']}
-Style: {topic_info.get('style', 'fact')}
+Style: {topic_info.get('style', 'glamour')}
 Format: {format_type}
 
-Write exactly {num_scenes} sequential narration scenes.
-Rules:
-- Scene 1 MUST be a 1-sentence hook under 14 words that grabs instant attention.
-- Each scene must be conversational, punchy, and teach one clear fact.
-- Total narration word count: {120 if format_type == 'short' else (160 if format_type == 'story' else 800)} words.
-- Provide 2-3 specific visual search terms per scene for stock footage (Pixabay/Pexels), focusing on concrete objects and action (e.g. "telescope stars", "deep ocean jellyfish", "laboratory microscope").
+Write exactly {num_scenes} sequential narration scenes designed for viral audience retention.
+Pacing Rules:
+- Scene 1 MUST be an instant scroll-stopping hook under 12 words. High intrigue, high status, conversational.
+- Each scene must be punchy, rhythmic, and captivating (15-22 words max per scene).
+- Speak directly to the viewer with confidence, elegance, and energy. No fluff.
+- Total narration word count: {90 if format_type == 'short' else (140 if format_type == 'story' else 650)} words.
+- Provide 2-3 specific visual search terms per scene for high-end cinematic footage (e.g. "luxury penthouse sunset drone", "cinematic supercar night rain", "monaco yacht harbor aerial", "fashion model slow motion", "diamond watch macro").
+- Provide 1 'image_prompt' per scene for photorealistic AI illustration (vertical 9:16 composition, 8k cinematic lighting, glamorous atmosphere).
 
 Return ONLY JSON:
 {{
   "topic": "{topic_info['topic']}",
   "title": "{topic_info['title']}",
-  "description": "Engaging 2-sentence description summarizing the concept.",
-  "hashtags": ["#science", "#education", "#{topic_info.get('category', 'knowledge').replace(' ', '')}"],
+  "description": "Magnetic 2-sentence description summarizing this aesthetic exploration.",
+  "hashtags": ["#luxury", "#aesthetic", "#lifestyle", "#viral", "#glamour", "#{topic_info.get('category', 'mindset').split()[0]}"],
   "scenes": [
     {{
       "text": "spoken narration for this scene",
-      "search_terms": ["query1", "query2"]
+      "search_terms": ["luxury penthouse sunset", "cinematic skyline 4k"],
+      "image_prompt": "cinematic 8k vertical shot, ultra luxury penthouse overlooking neon metropolis at sunset, golden atmospheric lighting, 35mm photo, sleek elegant interior, 9:16"
     }}
   ]
 }}"""
@@ -263,16 +288,33 @@ Return ONLY JSON:
         script = self.reason_json(prompt, validator, rounds=2)
 
         if not script:
-            # Resilient fallback script
+            # Resilient glamorous fallback script
             script = {
                 "topic": topic_info["topic"],
                 "title": topic_info["title"],
-                "description": f"Exploring {topic_info['topic']}.",
-                "hashtags": ["#science", "#curiosity", "#facts"],
+                "description": f"Exploring {topic_info['topic']} with cinematic elegance and high-status allure.",
+                "hashtags": ["#luxury", "#aesthetic", "#lifestyle", "#viral", "#glamour", "#mindset"],
                 "scenes": [
-                    {"text": f"Did you know the secret behind {topic_info['topic']}?", "search_terms": ["science laboratory", "nature"]},
-                    {"text": "Scientists discovered that under extreme conditions, ordinary matter behaves in unbelievable ways.", "search_terms": ["physics experiment", "space"]},
-                    {"text": "This fundamental law of nature continues to shape how we understand the universe today.", "search_terms": ["galaxy cosmos", "earth horizon"]},
+                    {
+                        "text": "True power never shouts. In a world of loud distractions, subtle elegance is the ultimate psychological advantage.",
+                        "search_terms": ["luxury penthouse sunset 4k", "cinematic city drone"],
+                        "image_prompt": "hyper-realistic 8k cinematic vertical frame, luxury penthouse living room overlooking golden sunset skyline, 9:16"
+                    },
+                    {
+                        "text": "The top 0.01% understand that genuine status is not about flaunting wealth, but mastering silent precision.",
+                        "search_terms": ["monaco yacht harbor 4k", "supercar cinematic slow motion"],
+                        "image_prompt": "sleek luxury yacht sailing past Mediterranean cliffs at golden hour, ultra realistic cinematic lighting, 9:16"
+                    },
+                    {
+                        "text": "When you refine your presence and discipline your focus, the entire room shifts in your favor.",
+                        "search_terms": ["fashion model elegant walk slow motion", "diamond jewelry macro reflection"],
+                        "image_prompt": "elegant high fashion portrait with soft golden rim lighting, haute couture aesthetic, 9:16"
+                    },
+                    {
+                        "text": "Elevate your standards, master the art of presence, and follow for more daily inspiration.",
+                        "search_terms": ["night skyline luxury neon", "penthouse terrace champagne sunset"],
+                        "image_prompt": "luxurious rooftop terrace overlooking illuminated city skyline, warm ambient lighting, 9:16"
+                    },
                 ],
             }
 

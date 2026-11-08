@@ -1,0 +1,46 @@
+name: Backtest strategy
+
+# Run from the Actions tab: pick a strategy, wait a few minutes, read the report in the run summary.
+# NOTE: this file must live in the repo's ROOT folder  .github/workflows/  (not inside trading-bot/).
+on:
+  workflow_dispatch:
+    inputs:
+      strategy:
+        description: "Strategy to test"
+        type: choice
+        options: [momentum, donchian, rsi2]
+        default: momentum
+      years:
+        description: "Years of history"
+        default: "10"
+      robust:
+        description: "Also run the robustness sweep (slower, recommended)"
+        type: boolean
+        default: true
+
+defaults:
+  run:
+    working-directory: trading-bot
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Self-tests (engine accounting, no-look-ahead, stops)
+        run: pytest -q
+      - name: Backtest on real NSE data
+        run: python run_backtest.py --strategy ${{ inputs.strategy }} --data yahoo --years ${{ inputs.years }} ${{ inputs.robust && '--robust' || '' }} --out reports/${{ inputs.strategy }}
+      - name: Show report in the run summary
+        if: always()
+        run: cat reports/${{ inputs.strategy }}/summary.md >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backtest-${{ inputs.strategy }}
+          path: trading-bot/reports/

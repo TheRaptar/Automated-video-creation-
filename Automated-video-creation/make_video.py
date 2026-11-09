@@ -384,8 +384,19 @@ def generate_short(topic, history, state) -> dict:
     else:
         style_key = weighted_choice([k for k in STYLES if k != state.get("last_style")] or list(STYLES),
                                     state.get("weights", {}).get("style", {}))
-    prompt = f"""You write scripts for viral, magnetic YouTube Shorts and Instagram Reels about Attraction Psychology, Dating Dynamics, and Romantic Allure.
-Channel Theme: Subconscious chemistry, flirting psychology, emotional tension, body language secrets, and irresistible romantic charm.
+    prompt = f"""You are a professional adult glamour filmmaker, sensual video director, and cinematic AI content creator.
+You create bold, extremely seductive, and visually captivating YouTube Shorts and Instagram Reels featuring fictional adult characters aged 25 and above.
+
+DIRECTOR'S VISUAL & ARTISTIC STYLE:
+- Extremely glamorous and alluring adult models (all characters strictly fictional adults aged 25+).
+- Sensual expressions, magnetic eye contact, and confident, captivating body language.
+- Revealing but non-explicit fashion: elegant lingerie-inspired silk robes, satin slips, lace couture with full coverage (NO visible nudity).
+- Sensual dancing and slow, graceful, hypnotic movements.
+- Romantic bedroom and luxury hotel settings: candlelit suites, silk bedding, penthouse terrace at twilight, velvet lounge.
+- Intimate romantic atmosphere with artistic implied intimacy and full coverage.
+- Beautiful, arresting close-up portraits with dramatic cinematic lighting, rich warm shadows, realistic skin textures, and 35mm film grain.
+- Professional camera movements (slow dolly push, shallow f/1.4 depth of field, gentle panning).
+
 {topic_line}
 Video style: {STYLES[style_key]}
 {_trend_hint(state)}
@@ -393,20 +404,20 @@ Video style: {STYLES[style_key]}
 Return ONLY JSON with this exact shape:
 {{
   "topic": "short name of the chosen topic",
-  "title": "high-CTR curiosity title under 65 characters with romantic emoji",
-  "description": "Engaging 1-2 sentence description",
-  "hashtags": ["#attraction", "#datingtips", "#psychology", "#romance", "#chemistry", "#allure"],
-  "scenes": [{{"text": "narration for this scene", "search_terms": ["cinematic romantic query 1", "cinematic romantic query 2"]}}]
+  "title": "high-CTR curiosity title under 65 characters with seductive emoji",
+  "description": "Bold, seductive 1-2 sentence description",
+  "hashtags": ["#attraction", "#glamour", "#datingtips", "#romance", "#chemistry", "#allure", "#seduction"],
+  "scenes": [{{"text": "narration for this scene", "search_terms": ["cinematic glamour query 1", "cinematic glamour query 2"]}}]
 }}
 Rules:
 - {lo} to {lo + 2} scenes, about {total} seconds in total (roughly {int(words * 0.9)} words of narration).
-- Each scene: 1-2 punchy, rhythmic, seductive sentences (under 20 words). Speak directly to "you" with calm, magnetic elegance.
-- Scene 1 is an INSTANT scroll-stopping hook under 12 words that triggers curiosity about attraction or chemistry. Do NOT start with "Did you know" or "Imagine".
-- Provide a psychological attraction insight with a memorable romantic payoff in the final scenes.
-- The last scene ends with a smooth line inviting viewers to follow for daily attraction and psychology secrets.
-- STRICT SAFETY: NO graphic sexual depictions, NO explicit anatomy, NO harassment. Keep it seductive, psychological, aesthetic, and compliant with YouTube/Instagram Community Guidelines.
-- search_terms: 2 DIFFERENT concrete, cinematic romantic stock-footage queries per scene
-  (e.g. "couple candlelit date night", "intense eye contact cinematic", "romantic evening dress slow motion", "couple walking city night rain", "luxury wine bar couple"). Never abstract words, names, or brands."""
+- Each scene: 1-2 punchy, rhythmic, seductive sentences (under 20 words). Speak directly to "you" with calm, magnetic, sensual elegance.
+- Scene 1 is an INSTANT scroll-stopping hook under 12 words triggering intense curiosity about attraction, romance, or chemistry. Do NOT start with "Did you know" or "Imagine".
+- Provide a psychological attraction insight with a memorable, seductive romantic payoff in the final scenes.
+- The last scene ends with a smooth line inviting viewers to follow for daily attraction and seduction secrets.
+- STRICT POLICY COMPLIANCE: All characters are adults aged 25+. NO visible nudity, NO graphic sexual depictions, NO non-consensual content. Keep it seductive, lingerie-inspired with full coverage, and 100% compliant with YouTube and Instagram Community Guidelines.
+- search_terms: 2 DIFFERENT concrete, cinematic glamour stock-footage queries per scene
+  (e.g. "glamorous woman silk dress slow motion", "sensual couple romantic bedroom candlelit", "elegant model luxury hotel suite portrait", "close up eye contact sensual lighting", "sensual dancing silhouette night"). Never abstract words, names, or brands."""
     data = llm_json(prompt, rounds=2, valid=_valid_scenes)
     if not data:
         sys.exit("Could not get a script from Gemini or Groq (services busy or keys invalid).")
@@ -528,42 +539,56 @@ def generate_story(topic, history, state) -> dict:
     """An original illustrated 'animated storybook' Short that teaches one true fact."""
     total = pick_seconds("VIDEO_SECONDS", "40-60")
     if OFFLINE:
-        STORY.update(art_style="soft watercolor storybook illustration", characters="a small orange fox in a blue scarf")
+        STORY.update(art_style="cinematic 8k glamour photography, warm chiaroscuro lighting, luxury hotel suite, 35mm film",
+                     characters="fictional 26-year-old adult woman, alluring expression, satin silk slip dress with full coverage")
         return _normalize({
-            "topic": "offline story test", "title": "Offline story test", "description": "Testing.",
-            "hashtags": ["#story"], "category": None, "style": "story",
-            "scenes": [{"text": "Once upon a time, a little fox found a glowing stone.", "image_prompt": "fox finds a stone"},
-                       {"text": "It was not magic at all, only a very old crystal reflecting the moon.", "image_prompt": "crystal in moonlight"},
-                       {"text": "And that is how the fox learned to look closer.", "image_prompt": "fox smiling"}]})
+            "topic": "offline glamour story test", "title": "The Art of Seductive Allure", "description": "Cinematic visual exploration of romantic chemistry.",
+            "hashtags": ["#glamour", "#attraction", "#seduction", "#cinematic"], "category": None, "style": "story",
+            "scenes": [{"text": "In a luxury Parisian hotel at midnight, attraction needs no words.",
+                        "image_prompt": "cinematic 8k vertical portrait of alluring 26-year-old fictional woman in satin silk dress lounging on chaise in luxury candlelit suite, warm amber shadows, 9:16"},
+                       {"text": "A lingering glance and confident presence can command the entire room.",
+                        "image_prompt": "close up sensual portrait of fictional woman with intense captivating gaze, subtle smile, soft rim lighting, shallow f/1.4 depth of field, 9:16"},
+                       {"text": "Master the art of magnetic romance. Follow for more daily secrets.",
+                        "image_prompt": "striking vertical 9:16 shot of glamorous couple sharing an intimate slow dance on a moonlit terrace overlooking city lights, 8k"}]})
     n_lo = max(7, total // 7)
     topic_line, category = _topic_line(topic, history, state, False)
-    prompt = f"""You write original short animated-style stories for YouTube Shorts / Instagram Reels (illustrated storybook look).
+    prompt = f"""You are a professional adult glamour filmmaker, sensual video director, and cinematic AI content creator.
+You write bold, seductive, and visually captivating short cinematic stories for YouTube Shorts and Instagram Reels featuring fictional adult characters aged 25 and above.
+
+DIRECTOR'S VISUAL & ARTISTIC STYLE:
+- Extremely glamorous and alluring adult models (all characters strictly fictional adults aged 25+).
+- Sensual expressions, magnetic eye contact, and confident, captivating body language.
+- Revealing but non-explicit fashion: elegant lingerie-inspired silk robes, satin slips, lace couture with full coverage (NO visible nudity).
+- Sensual dancing and slow, graceful, hypnotic movements.
+- Romantic bedroom and luxury hotel settings: candlelit suites, silk bedding, penthouse terrace at twilight, velvet lounge.
+- Intimate romantic atmosphere with artistic implied intimacy and full coverage.
+- Beautiful, arresting close-up portraits with dramatic cinematic lighting, rich warm shadows, realistic skin textures, and 35mm film grain.
+- Professional camera movements (slow dolly push, shallow f/1.4 depth of field, gentle panning).
+
 {topic_line}
-The story must teach exactly ONE true, well-documented fact or idea, woven naturally into the plot.
 {_trend_hint(state)}
 
 Return ONLY JSON with this exact shape:
 {{
   "topic": "short name of the topic",
-  "title": "curiosity-driven title under 60 characters",
-  "description": "1-2 sentence description",
-  "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4"],
-  "art_style": "ONE sentence describing a consistent visual style, e.g. soft watercolor storybook illustration, warm colors, rounded friendly shapes",
-  "characters": "one sentence fixing the look of each recurring character (species, colors, clothes)",
-  "scenes": [{{"text": "narration, 1-2 short sentences", "image_prompt": "what the picture shows: action, setting, mood", "search_terms": ["fallback stock query"]}}]
+  "title": "curiosity-driven seductive title under 60 characters",
+  "description": "1-2 sentence alluring description",
+  "hashtags": ["#glamour", "#attraction", "#datingtips", "#romance", "#chemistry", "#allure", "#seduction"],
+  "art_style": "cinematic 8k photography, warm chiaroscuro candlelit lighting, luxury boutique hotel suite, 35mm film grain, shallow depth of field f/1.4",
+  "characters": "one sentence describing the recurring fictional adult character (aged 25+, alluring styling, satin silk lingerie-inspired dress with full coverage)",
+  "scenes": [{{"text": "narration, 1-2 short seductive sentences", "image_prompt": "detailed 8k vertical shot description: fictional adult character aged 25+, satin silk slip with full coverage, luxury bedroom or candlelit lounge, sensual expression, 9:16", "search_terms": ["glamorous woman silk dress slow motion"]}}]
 }}
 Rules:
 - {n_lo} to {n_lo + 2} scenes, about {total} seconds of narration in total.
-- Arc: hook, problem, attempts, twist, resolution with a clear lesson. The last scene invites viewers to follow.
-- ORIGINAL characters only: no existing franchises, no real people, no brands. Kid-safe: no violence, fear or romance.
-- image_prompt must never ask for text, letters, logos or signs inside the picture.
-- Accuracy matters: the real-world fact in the story must be true."""
+- Arc: seductive hook, emotional tension, magnetic chemistry, climax, and closing call to action.
+- STRICT POLICY COMPLIANCE: All characters are fictional adults aged 25+. NO visible nudity, NO graphic sexual depictions, NO non-consensual content. Full coverage only, compliant with YouTube and Instagram Community Guidelines.
+- image_prompt must never ask for text, letters, logos or signs inside the picture."""
     data = llm_json(prompt, rounds=2, valid=lambda d: _valid_scenes(d, 5))
     if not data:
         sys.exit("Could not get a story script from Gemini or Groq.")
     script = _normalize(data)
-    STORY.update(art_style=str(data.get("art_style") or "soft watercolor storybook illustration"),
-                 characters=str(data.get("characters") or ""))
+    STORY.update(art_style=str(data.get("art_style") or "cinematic 8k photography, warm chiaroscuro lighting, luxury hotel suite, 35mm film grain"),
+                 characters=str(data.get("characters") or "fictional 26-year-old adult woman, alluring expression, elegant satin silk slip with full coverage"))
     for sc in script["scenes"]:
         sc["image_prompt"] = str(sc.get("image_prompt") or sc["text"])
     script.update(category=category, style="story")
@@ -640,8 +665,9 @@ def _pexels(query: str, dest: Path, used: set) -> bool:
 
 def _gradient(dest: Path, seconds: float) -> None:
     """Last-resort background so a video is ALWAYS produced, even if stock search fails."""
-    c0 = "0x%06x" % random.randint(0x101040, 0x4040a0)
-    c1 = "0x%06x" % random.randint(0x300030, 0x802060)
+    # Seductive deep velvet burgundy, dark champagne amber, and midnight sapphire tones
+    c0 = "0x%06x" % random.randint(0x1a0510, 0x3d0d20)
+    c1 = "0x%06x" % random.randint(0x2a0d18, 0x5a1830)
     run(["ffmpeg", "-y", "-f", "lavfi",
          "-i", f"gradients=s={W}x{H}:c0={c0}:c1={c1}:duration={seconds:.1f}:speed=0.03:rate={FPS}",
          "-c:v", "libx264", "-pix_fmt", "yuv420p", str(dest)])
@@ -649,7 +675,7 @@ def _gradient(dest: Path, seconds: float) -> None:
 
 def fetch_clip(query: str, dest: Path, used: set, seconds: float) -> None:
     if not OFFLINE:
-        for q in (query, " ".join(query.split()[:1]), "nature"):
+        for q in (query, " ".join(query.split()[:2]), "candlelight romantic", "glamorous couple"):
             for provider in (_pexels, _pixabay):
                 try:
                     if provider(q, dest, used):

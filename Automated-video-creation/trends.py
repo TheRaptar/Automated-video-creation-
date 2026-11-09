@@ -150,28 +150,26 @@ def analyze(sig: dict, llm_json, categories: list[str]) -> dict | None:
         history = json.loads(Path("history.json").read_text(encoding="utf-8"))[-60:]
     except Exception:
         pass
-    prompt = f"""You are the trend analyst of an educational YouTube Shorts / Instagram Reels channel.
+    prompt = f"""You are the lead Trend Analyst and Creative Strategist for a high-retention Adult Glamour, Seduction Psychology, and Romantic Allure YouTube Shorts and Instagram Reels channel.
 Niches: {', '.join(categories)}. Today is {_today()}.
 
 SIGNALS (what people search for and watch right now):
 {_signals_text(sig)}
 
-Turn them into video ideas. Return ONLY JSON:
-{{"ideas": [{{"topic": "specific explainer topic", "angle": "the surprising angle or question",
+Turn trending cultural conversations, relationship queries, and psychological hooks into bold, seductive, high-engagement video concepts. Return ONLY JSON:
+{{"ideas": [{{"topic": "specific attraction or romantic glamour topic", "angle": "the psychological secret, visual allure, or tension trigger",
   "why_trending": "which signal(s) inspired it", "format": "short|long|story",
-  "style": "fact|myth|how|top3|story|whatif", "score": 1-10}}],
- "format_trends": ["video formats/hooks that visibly work in the signals - only with evidence, else empty"],
- "title_patterns": ["title patterns seen in the top videos"]}}
+  "style": "allure|chemistry|mystery|charm|seduction|romance", "score": 1-10}}],
+ "format_trends": ["video formats, hooks, or visual styles that visibly generate viral retention"],
+ "title_patterns": ["high-CTR curiosity title patterns seen in top romantic/lifestyle shorts"]}}
 
 Rules:
-- 12 ideas: 6 "short", 3 "long" (deep-dive, 5-7 minutes), 3 "story" (an original illustrated story that teaches one true fact).
-- Convert trends into EVERGREEN, factual explainers ("the science behind X", "how X works", "history of X").
-  If a trending item is unsafe, you may use its underlying general topic (hurricane in the news -> how hurricanes form).
-- NEVER include: real living people by name, celebrity gossip, politics or elections, wars, crime, disasters,
-  deaths, lawsuits, sports results, medical or financial advice, sexual or violent content, unverified rumours,
-  brand controversies, or anything that needs breaking-news accuracy.
+- 12 ideas: 6 "short" (fast-paced viral Shorts), 3 "long" (deep-dive masterclass), 3 "story" (cinematic sensual narrative featuring adult fictional characters 25+).
+- Convert trends into high-retention concepts exploring romantic psychology, subconscious chemistry triggers, non-verbal seduction, bedroom/luxury hotel aesthetics, and magnetic confidence.
+- Visual style focus: Fictional adult characters aged 25+, glamorous lingerie-inspired fashion with full coverage, intimate warm lighting, luxury hotel suites, romantic bedrooms, and cinematic close-ups.
+- NEVER include: real living people by name, celebrity gossip, politics, tragedy, explicit pornography, visible nudity, non-consensual content, or medical advice.
 - Do not repeat or closely resemble these earlier topics: {'; '.join(history) or 'none'}.
-- score = expected audience interest x safety x how well it fits the niches."""
+- score = expected viral retention x romantic intrigue x aesthetic fit for the glamour niche."""
     valid = lambda d: (isinstance(d, dict) and isinstance(d.get("ideas"), list)
                        and sum(isinstance(i, dict) and isinstance(i.get("topic"), str) for i in d["ideas"]) >= 3)
     return llm_json(prompt, rounds=2, valid=valid)

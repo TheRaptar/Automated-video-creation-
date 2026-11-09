@@ -91,27 +91,23 @@ def pick_seconds(env_name: str, default: str) -> int:
 
 
 DEFAULT_CATEGORIES = [
-    "ultra luxury lifestyle",
-    "magnetic aesthetics & high status",
-    "cyberpunk & futuristic elegance",
-    "elite mindset & wealth psychology",
-    "visual spectacles & glamorous wonders",
-    "haute horlogerie & supercar design",
-    "architectural masterpieces & penthouses",
-    "rare gemstones & luxury treasures",
-    "quiet luxury & high-fashion secrets",
+    "attraction & seduction psychology",
+    "dating dynamics & romantic secrets",
+    "magnetic allure & sensual aesthetics",
+    "flirting psychology & charm secrets",
+    "relationship chemistry & presence",
+    "dark romance & mystery aesthetics",
 ]
 CATEGORIES = [c.strip() for c in os.environ.get("CATEGORIES", "").split(",") if c.strip()] or DEFAULT_CATEGORIES
 
-# High-engagement viral Short styles:
+# High-engagement romantic allure & attraction Short styles:
 STYLES = {
-    "glamour": "Ultra-glamorous showcase: high-status visual allure, quiet luxury, and mesmerizing aesthetic presence.",
-    "mystery": "Exclusive mystery: an unspoken secret, hidden world, or psychological rule of the top 0.01%.",
-    "aesthetic": "Hypnotic sensory aesthetic: golden hour / neon cyberpunk cinematography with elegant pacing.",
-    "mindset": "Elite power mindset: high-impact ambition, focus discipline, and magnetic psychological laws.",
-    "spectacle": "Awe-inspiring spectacle: hypercars, megayachts, futuristic superstructures, or rare celestial luxury.",
-    "story": "Cinematic mini-story: a gripping journey of ambition, mastery, or extreme refinement with a powerful twist.",
-    "fact": "Fascinating high-status discovery: an extraordinary revelation about the world or human achievement.",
+    "allure": "Magnetic allure & sensual tension: exploring what makes someone deeply captivating.",
+    "chemistry": "Romantic chemistry trigger: how unspoken dynamics and eye contact spark instant connection.",
+    "mystery": "Dark romance & enigma: why subtle emotional distance and unpredictability create obsession.",
+    "charm": "High-level charm: conversational and body language techniques that captivate anyone.",
+    "seduction": "Seduction psychology: the subconscious laws of desire and irresistible presence.",
+    "romance": "Sensual romantic aesthetics: candlelit moments, deep chemistry, and cinematic intimacy.",
 }
 
 FONT_CANDIDATES = [
@@ -388,8 +384,8 @@ def generate_short(topic, history, state) -> dict:
     else:
         style_key = weighted_choice([k for k in STYLES if k != state.get("last_style")] or list(STYLES),
                                     state.get("weights", {}).get("style", {}))
-    prompt = f"""You write scripts for viral, glamorous, ultra-stylish YouTube Shorts and Instagram Reels.
-Channel Theme: High-status aesthetics, luxury lifestyle, quiet elegance, magnetic psychology, and visual allure.
+    prompt = f"""You write scripts for viral, magnetic YouTube Shorts and Instagram Reels about Attraction Psychology, Dating Dynamics, and Romantic Allure.
+Channel Theme: Subconscious chemistry, flirting psychology, emotional tension, body language secrets, and irresistible romantic charm.
 {topic_line}
 Video style: {STYLES[style_key]}
 {_trend_hint(state)}
@@ -397,19 +393,20 @@ Video style: {STYLES[style_key]}
 Return ONLY JSON with this exact shape:
 {{
   "topic": "short name of the chosen topic",
-  "title": "high-CTR curiosity title under 65 characters with emoji",
+  "title": "high-CTR curiosity title under 65 characters with romantic emoji",
   "description": "Engaging 1-2 sentence description",
-  "hashtags": ["#luxury", "#aesthetic", "#lifestyle", "#viral", "#glamour", "#mindset"],
-  "scenes": [{{"text": "narration for this scene", "search_terms": ["cinematic visual query 1", "cinematic visual query 2"]}}]
+  "hashtags": ["#attraction", "#datingtips", "#psychology", "#romance", "#chemistry", "#allure"],
+  "scenes": [{{"text": "narration for this scene", "search_terms": ["cinematic romantic query 1", "cinematic romantic query 2"]}}]
 }}
 Rules:
 - {lo} to {lo + 2} scenes, about {total} seconds in total (roughly {int(words * 0.9)} words of narration).
-- Each scene: 1-2 punchy, rhythmic, elegant sentences (under 20 words). Speak directly to "you" with confidence and sophistication. No fluff.
-- Scene 1 is an INSTANT scroll-stopping hook under 12 words that triggers high curiosity or status gap. Do NOT start with "Did you know" or "Imagine".
-- Provide an intriguing perspective with a satisfying, memorable payoff in the final scenes.
-- The last scene ends with a smooth line inviting viewers to follow for daily aesthetic inspiration.
-- search_terms: 2 DIFFERENT concrete, cinematic stock-footage queries per scene targeting luxury, beauty, and sleek visual aesthetics
-  (e.g. "luxury penthouse sunset", "supercar night drive slow motion", "monaco yacht harbor", "fashion model runway", "diamond watch macro"). Never abstract words, names, or brands."""
+- Each scene: 1-2 punchy, rhythmic, seductive sentences (under 20 words). Speak directly to "you" with calm, magnetic elegance.
+- Scene 1 is an INSTANT scroll-stopping hook under 12 words that triggers curiosity about attraction or chemistry. Do NOT start with "Did you know" or "Imagine".
+- Provide a psychological attraction insight with a memorable romantic payoff in the final scenes.
+- The last scene ends with a smooth line inviting viewers to follow for daily attraction and psychology secrets.
+- STRICT SAFETY: NO graphic sexual depictions, NO explicit anatomy, NO harassment. Keep it seductive, psychological, aesthetic, and compliant with YouTube/Instagram Community Guidelines.
+- search_terms: 2 DIFFERENT concrete, cinematic romantic stock-footage queries per scene
+  (e.g. "couple candlelit date night", "intense eye contact cinematic", "romantic evening dress slow motion", "couple walking city night rain", "luxury wine bar couple"). Never abstract words, names, or brands."""
     data = llm_json(prompt, rounds=2, valid=_valid_scenes)
     if not data:
         sys.exit("Could not get a script from Gemini or Groq (services busy or keys invalid).")
@@ -821,8 +818,8 @@ def build_scene(idx: int, text: str, visual: Path, audio: Path, dur: float, font
         for n, (chunk, start, end) in enumerate(caption_chunks(text, dur)):
             tf = WORK / f"cap_{idx}_{n}.txt"
             tf.write_text(chunk.upper(), encoding="utf-8")
-            # Alternating Electric Gold (0xFFD700) and Diamond White for high viral engagement
-            color = "0xFFD700" if n % 2 == 1 else "white"
+            # Alternating Vibrant Rose Crimson (0xFF3366) and Diamond White for romantic allure aesthetic
+            color = "0xFF3366" if n % 2 == 1 else "white"
             filters.append(_drawtext(font, tf, f"fontsize=82:fontcolor={color}:borderw=7:bordercolor=black"
                                                f":shadowx=3:shadowy=3:shadowcolor=black@0.85"
                                                f":x=(w-text_w)/2:y=h*0.58", f"between(t,{start:.2f},{end:.2f})"))

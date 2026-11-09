@@ -161,125 +161,126 @@ class RaptarAgent:
     # ---------------------------------------------------------
     # Capability 1: Trend Evaluation & Topic Formulation (Glamour, Luxury & Viral Aesthetics)
     # ---------------------------------------------------------
+    # ---------------------------------------------------------
+    # Capability 1: Trend Evaluation & Topic Formulation (Attraction, Romance & Allure)
+    # ---------------------------------------------------------
     def evaluate_and_pick_topic(
         self,
         signals: Dict[str, Any],
         categories: List[str],
         format_type: str = "short",
     ) -> Dict[str, Any]:
-        """Evaluates trend signals and selects high-virality, glamorous, and stylish video topics."""
+        """Evaluates trend signals and selects high-virality romantic attraction and psychological allure topics."""
         history = self.load_history()
         state = self.load_state()
 
-        glamorous_default_niches = [
-            "ultra luxury lifestyle",
-            "magnetic aesthetics & high status",
-            "cyberpunk & futuristic elegance",
-            "elite mindset & wealth psychology",
-            "visual spectacles & glamorous wonders",
-            "haute horlogerie & supercar design",
+        allure_default_niches = [
+            "attraction & seduction psychology",
+            "dating dynamics & romantic secrets",
+            "magnetic allure & sensual aesthetics",
+            "flirting psychology & charm secrets",
+            "relationship chemistry & presence",
+            "dark romance & mystery aesthetics",
         ]
-        active_categories = categories or glamorous_default_niches
+        active_categories = categories or allure_default_niches
 
         weights = state.get("weights", {})
         recent_cats = state.get("recent_categories", [])[-4:]
         available_cats = [c for c in active_categories if c not in recent_cats] or active_categories
 
-        # Weight-proportional category selection favoring high-engagement viral niches
+        # Weight-proportional category selection favoring high-engagement attraction niches
         cat_weights = weights.get("category", {})
         category = self.weighted_choice(available_cats, cat_weights)
 
         # Build prompt for Gemini Agent
         avoid_topics = "; ".join(history[-60:]) if history else "none"
-        prompt = f"""You are the lead Creative Director, Trend Strategist, and Viral Hook Architect for a viral YouTube Shorts and Instagram Reels brand.
-Channel Identity: Glamorous, ultra-stylish, visually stunning, high-status aesthetics and magnetic psychological curiosity.
-Audience: Millions of viewers seeking aesthetic visual satisfaction, luxury lifestyle, elite allure, and hypnotic storytelling.
+        prompt = f"""You are the lead Creative Director and Viral Content Strategist for a high-retention YouTube Shorts and Instagram Reels channel specializing in Attraction Psychology, Romantic Allure, and Dating Dynamics.
+Channel Identity: Sophisticated, magnetic, intriguing, emotionally charged, and highly aesthetic exploration of human desire, romantic chemistry, and dating psychology.
 Target Category: {category}
-Target Video Format: {format_type} (short: 30-50s fast-paced viral Short, story: 45-60s cinematic narrative, long: 5-7 min luxury documentary)
+Target Video Format: {format_type} (short: 30-50s fast-paced viral Short, story: 45-60s cinematic narrative)
 
 Avoid repeating or closely resembling any of these recent topics:
 {avoid_topics}
 
-Formulate ONE original, irresistible, high-virality video concept.
+Formulate ONE original, irresistible, high-virality topic about romantic attraction, dating dynamics, or psychological allure.
 Core Themes to Draw From:
-- Ultra-Luxury Lifestyle: Billionaire penthouses in Monaco or Manhattan, bespoke supercars, mega yachts, private aviation, quiet luxury.
-- Magnetic Allure & Social Psychology: The subtle art of magnetic charisma, unspoken body language of high-status figures, aura, silent elegance.
-- Futuristic Elegance & Cyber Glamour: Sleek neon cyberpunk aesthetics, hyper-tech design, golden hour architecture, glowing midnight skylines.
-- Elite Mindset & Ambition: Psychological triggers of extreme success, focus discipline, unstoppable confidence.
-- Visual Spectacles: Mesmerizing gems, aesthetic design marvels, breathtaking world landscapes.
+- Attraction & Seduction Psychology: Eye-contact tension, subconscious chemistry triggers, non-verbal flirting signals, proximity psychology.
+- Romantic Mystery & Dark Romance: Emotional unpredictability, the art of subtle detachment, why mystery creates obsession, quiet confidence.
+- Flirting Dynamics & Conversational Charm: Playful teasing, verbal chemistry, building romantic tension, memorable compliments.
+- High-Glamour Allure & Aesthetics: Candlelit date nights, Parisian romance, evening elegance, sensual romantic cinematography.
 
 Rules:
-1. Scene 1 hook MUST stop the scroll in under 1.5 seconds with high curiosity and status (e.g. "The silent rule the top 0.01% never break...", "Why elegance is the ultimate psychological weapon...").
-2. NEVER use boring dry encyclopedia openings like "Did you know that in 1902..." or "Scientists discovered...".
-3. Keep it ethical, aspirational, captivating, and safe (no hate speech, real tragedies, or political drama).
+1. Scene 1 hook MUST stop the scroll in under 1.5 seconds with high emotional curiosity or romantic intrigue (e.g. "The 3-second eye contact trick that creates instant tension...", "Why being unpredictable makes you 10 times more attractive...").
+2. Tone: Sophisticated, magnetic, intriguing, psychologically insightful, and respectful.
+3. STRICT SAFETY: NO pornography, NO graphic sexual depictions, NO explicit anatomy, NO harassment, and NO harmful manipulation. Keep content seductive, glamorous, psychological, and fully compliant with YouTube and Instagram Community Guidelines.
 
 Return ONLY JSON:
 {{
   "topic": "precise topic name",
-  "title": "high-CTR curiosity title under 75 characters with emoji",
-  "angle": "the irresistible perspective or luxury mystery",
-  "style": "glamour" | "mystery" | "aesthetic" | "mindset" | "spectacle",
+  "title": "high-CTR curiosity title under 75 characters with romantic emoji",
+  "angle": "the psychological secret or tension trigger",
+  "style": "allure" | "chemistry" | "mystery" | "charm" | "seduction" | "romance",
   "category": "{category}",
-  "virality_score": 9.4
+  "virality_score": 9.5
 }}"""
 
         validator = lambda d: isinstance(d, dict) and bool(d.get("topic")) and bool(d.get("title"))
         data = self.reason_json(prompt, validator, rounds=2)
 
         if not data:
-            # Resilient glamorous fallback topic generator
+            # Resilient romantic allure fallback topics
             fallback_topics = [
-                ("The Unspoken Rules of Quiet Luxury", "The Silent Rule The Top 0.01% Never Break ✨", "glamour", "ultra luxury lifestyle"),
-                ("The Psychology of Magnetic Presence", "Why True Elegance Is An Unbeatable Weapon ⚡", "aesthetic", "magnetic aesthetics & high status"),
-                ("Inside The $200M Secret Superyachts", "Inside The Megayachts Hidden From Public Maps 🛥️", "mystery", "ultra luxury lifestyle"),
-                ("The Midnight Cyberpunk Architecture of Tokyo", "The Futuristic Metropolis You Won't Believe Exists 🌆", "spectacle", "cyberpunk & futuristic elegance"),
-                ("The Billionaire Focus Discipline", "How The Elite Master Their Dopamine & Ambition 👑", "mindset", "elite mindset & wealth psychology"),
+                ("The 3-Second Eye Contact Technique", "The 3-Second Eye Contact Trick That Sparks Instant Tension 👀✨", "chemistry", "attraction & seduction psychology"),
+                ("The Psychology of Romantic Mystery", "Why Being Unpredictable Makes You Irresistibly Addictive 🖤", "mystery", "dark romance & mystery aesthetics"),
+                ("The Triangles Method of Seduction", "The Subtle Glancing Law That Creates Magnetic Attraction 💋", "seduction", "flirting psychology & charm secrets"),
+                ("The Unspoken Body Language of Chemistry", "Signs of Intense Unspoken Attraction You Can't Fake ⚡", "allure", "relationship chemistry & presence"),
+                ("The Art of Conversational Charm", "How To Make Anyone Feel Deeply Drawn To You 🌹", "charm", "dating dynamics & romantic secrets"),
             ]
             pick = random.choice(fallback_topics)
             data = {
                 "topic": pick[0],
                 "title": pick[1],
-                "angle": "Exploring the magnetic, high-status psychology and visual allure behind extreme elegance.",
+                "angle": "Exploring the subconscious psychological dynamics that create intense romantic attraction.",
                 "style": pick[2],
                 "category": pick[3],
-                "virality_score": 9.2,
+                "virality_score": 9.3,
             }
 
         return data
 
     # ---------------------------------------------------------
-    # Capability 2: Scene-by-Scene Script Generation (Cinematic & Punchy)
+    # Capability 2: Scene-by-Scene Script Generation (Magnetic & Alluring)
     # ---------------------------------------------------------
     def plan_script(self, topic_info: Dict[str, Any], format_type: str = "short") -> Dict[str, Any]:
         """Generates a complete scene-by-scene script with visual queries and narration."""
-        num_scenes = 4 if format_type == "short" else (6 if format_type == "story" else 12)
+        num_scenes = 4 if format_type == "short" else 6
 
-        prompt = f"""You are the world-class screenwriter for a viral, glamorous Short/Reel.
+        prompt = f"""You are the master screenwriter for a viral, magnetic Short/Reel about romantic attraction and dating psychology.
 Topic: {topic_info['topic']}
 Title: {topic_info['title']}
-Style: {topic_info.get('style', 'glamour')}
+Style: {topic_info.get('style', 'allure')}
 Format: {format_type}
 
 Write exactly {num_scenes} sequential narration scenes designed for viral audience retention.
 Pacing Rules:
-- Scene 1 MUST be an instant scroll-stopping hook under 12 words. High intrigue, high status, conversational.
-- Each scene must be punchy, rhythmic, and captivating (15-22 words max per scene).
-- Speak directly to the viewer with confidence, elegance, and energy. No fluff.
-- Total narration word count: {90 if format_type == 'short' else (140 if format_type == 'story' else 650)} words.
-- Provide 2-3 specific visual search terms per scene for high-end cinematic footage (e.g. "luxury penthouse sunset drone", "cinematic supercar night rain", "monaco yacht harbor aerial", "fashion model slow motion", "diamond watch macro").
-- Provide 1 'image_prompt' per scene for photorealistic AI illustration (vertical 9:16 composition, 8k cinematic lighting, glamorous atmosphere).
+- Scene 1 MUST be an instant scroll-stopping hook under 12 words that triggers curiosity about attraction or chemistry.
+- Each scene must be punchy, rhythmic, and alluring (15-22 words max per scene).
+- Speak with calm, confident, magnetic elegance directly to the viewer.
+- Total narration word count: {90 if format_type == 'short' else 140} words.
+- Provide 2-3 specific visual search terms per scene for cinematic romantic stock footage (e.g. "couple candlelit date night", "romantic evening dress slow motion", "intense eye contact cinematic", "luxury wine bar couple", "silhouette couple sunset").
+- Provide 1 'image_prompt' per scene for photorealistic romantic illustration (vertical 9:16 composition, 8k cinematic lighting, moody candlelit romance, elegant date night atmosphere).
 
 Return ONLY JSON:
 {{
   "topic": "{topic_info['topic']}",
   "title": "{topic_info['title']}",
-  "description": "Magnetic 2-sentence description summarizing this aesthetic exploration.",
-  "hashtags": ["#luxury", "#aesthetic", "#lifestyle", "#viral", "#glamour", "#{topic_info.get('category', 'mindset').split()[0]}"],
+  "description": "Magnetic 2-sentence description summarizing this attraction insight.",
+  "hashtags": ["#attraction", "#datingtips", "#psychology", "#romance", "#chemistry", "#allure"],
   "scenes": [
     {{
       "text": "spoken narration for this scene",
-      "search_terms": ["luxury penthouse sunset", "cinematic skyline 4k"],
-      "image_prompt": "cinematic 8k vertical shot, ultra luxury penthouse overlooking neon metropolis at sunset, golden atmospheric lighting, 35mm photo, sleek elegant interior, 9:16"
+      "search_terms": ["romantic candlelit date", "couple eye contact slow motion"],
+      "image_prompt": "cinematic 8k vertical shot, glamorous couple sharing an intense glance across a luxury candlelit lounge, soft moody lighting, 35mm photography, 9:16 portrait"
     }}
   ]
 }}"""
@@ -288,32 +289,32 @@ Return ONLY JSON:
         script = self.reason_json(prompt, validator, rounds=2)
 
         if not script:
-            # Resilient glamorous fallback script
+            # Resilient alluring fallback script
             script = {
                 "topic": topic_info["topic"],
                 "title": topic_info["title"],
-                "description": f"Exploring {topic_info['topic']} with cinematic elegance and high-status allure.",
-                "hashtags": ["#luxury", "#aesthetic", "#lifestyle", "#viral", "#glamour", "#mindset"],
+                "description": f"Exploring {topic_info['topic']} with psychological insight and magnetic romantic allure.",
+                "hashtags": ["#attraction", "#datingtips", "#psychology", "#romance", "#chemistry", "#allure"],
                 "scenes": [
                     {
-                        "text": "True power never shouts. In a world of loud distractions, subtle elegance is the ultimate psychological advantage.",
-                        "search_terms": ["luxury penthouse sunset 4k", "cinematic city drone"],
-                        "image_prompt": "hyper-realistic 8k cinematic vertical frame, luxury penthouse living room overlooking golden sunset skyline, 9:16"
+                        "text": "The most intense attraction never starts with words. It starts in the silence between two people.",
+                        "search_terms": ["romantic date night candlelight", "intense eye contact cinematic"],
+                        "image_prompt": "moody 8k cinematic photo, glamorous couple making subtle eye contact across a dimly lit wine bar, warm amber glow, 9:16"
                     },
                     {
-                        "text": "The top 0.01% understand that genuine status is not about flaunting wealth, but mastering silent precision.",
-                        "search_terms": ["monaco yacht harbor 4k", "supercar cinematic slow motion"],
-                        "image_prompt": "sleek luxury yacht sailing past Mediterranean cliffs at golden hour, ultra realistic cinematic lighting, 9:16"
+                        "text": "When you hold eye contact for just three seconds and break it with a subtle smile, their subconscious sparks instantly.",
+                        "search_terms": ["couple candlelit evening slow motion", "glamorous woman cocktail dress"],
+                        "image_prompt": "elegant woman in satin evening dress smiling mysteriously, Parisian luxury restaurant background, 9:16"
                     },
                     {
-                        "text": "When you refine your presence and discipline your focus, the entire room shifts in your favor.",
-                        "search_terms": ["fashion model elegant walk slow motion", "diamond jewelry macro reflection"],
-                        "image_prompt": "elegant high fashion portrait with soft golden rim lighting, haute couture aesthetic, 9:16"
+                        "text": "Mystery creates dopamine. When you don't reveal everything at once, their mind fills in the blanks with desire.",
+                        "search_terms": ["couple walking city night rain", "silhouette couple romantic sunset"],
+                        "image_prompt": "cinematic silhouette of couple walking under umbrella in glowing rainy city street at night, 9:16"
                     },
                     {
-                        "text": "Elevate your standards, master the art of presence, and follow for more daily inspiration.",
-                        "search_terms": ["night skyline luxury neon", "penthouse terrace champagne sunset"],
-                        "image_prompt": "luxurious rooftop terrace overlooking illuminated city skyline, warm ambient lighting, 9:16"
+                        "text": "Master the art of unspoken chemistry, and follow for more daily psychology secrets.",
+                        "search_terms": ["romantic rooftop sunset couple", "luxury candlelight lounge champagne"],
+                        "image_prompt": "romantic rooftop terrace at twilight, couple holding champagne flutes looking at city lights, 9:16"
                     },
                 ],
             }

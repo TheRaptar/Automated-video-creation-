@@ -194,93 +194,114 @@ class RaptarAgent:
 
         # Build prompt for Gemini Agent
         avoid_topics = "; ".join(history[-60:]) if history else "none"
-        prompt = f"""You are the lead Creative Director and Viral Content Strategist for a high-retention YouTube Shorts and Instagram Reels channel specializing in Attraction Psychology, Romantic Allure, and Dating Dynamics.
-Channel Identity: Sophisticated, magnetic, intriguing, emotionally charged, and highly aesthetic exploration of human desire, romantic chemistry, and dating psychology.
+        prompt = f"""You are a professional adult glamour filmmaker, sensual video director, and cinematic AI content creator.
+You direct bold, extremely seductive, and visually captivating YouTube Shorts and Instagram Reels featuring fictional adult characters aged 25 and above.
+
+DIRECTOR'S VISUAL & ARTISTIC STYLE:
+- Extremely glamorous and alluring adult models (all characters strictly fictional adults aged 25+).
+- Sensual expressions, magnetic eye contact, and confident, captivating body language.
+- Revealing but non-explicit high-fashion outfits: elegant lingerie-inspired fashion, silk robes, satin slips, corsetry couture, backless evening wear (strictly full coverage, NO visible nudity).
+- Sensual dancing and slow, graceful, hypnotic movements.
+- Romantic bedroom and luxury hotel settings: candlelit luxury suites, silk bedding, penthouse terrace at twilight, velvet lounge.
+- Intimate romantic atmosphere with artistic implied intimacy and full coverage.
+- Beautiful, arresting close-up portraits with dramatic cinematic lighting, rich warm shadows, realistic skin textures, and 35mm film grain.
+- Professional camera movements (slow dolly push, shallow f/1.4 depth of field, gentle panning).
+
 Target Category: {category}
 Target Video Format: {format_type} (short: 30-50s fast-paced viral Short, story: 45-60s cinematic narrative)
 
 Avoid repeating or closely resembling any of these recent topics:
 {avoid_topics}
 
-Formulate ONE original, irresistible, high-virality topic about romantic attraction, dating dynamics, or psychological allure.
+Formulate ONE original, irresistible, high-virality concept exploring romantic attraction, sensual chemistry, or intimate dating psychology.
 Core Themes to Draw From:
-- Attraction & Seduction Psychology: Eye-contact tension, subconscious chemistry triggers, non-verbal flirting signals, proximity psychology.
-- Romantic Mystery & Dark Romance: Emotional unpredictability, the art of subtle detachment, why mystery creates obsession, quiet confidence.
-- Flirting Dynamics & Conversational Charm: Playful teasing, verbal chemistry, building romantic tension, memorable compliments.
-- High-Glamour Allure & Aesthetics: Candlelit date nights, Parisian romance, evening elegance, sensual romantic cinematography.
+- Magnetic Allure & Seduction: Intense eye-contact tension, subconscious chemistry triggers, whisper dynamics, proximity psychology.
+- Sensual Romance & Intimate Tension: Late-night bedroom talks, luxury hotel rendezvous, the chemistry of lingering touch, unspoken desires.
+- Playful Charm & Flirting Secrets: Playful teasing, verbal chemistry, building romantic tension, confident allure.
+- Dark Romance & Mystery: The irresistible draw of emotional mystery, quiet elegance, magnetic presence.
 
 Rules:
-1. Scene 1 hook MUST stop the scroll in under 1.5 seconds with high emotional curiosity or romantic intrigue (e.g. "The 3-second eye contact trick that creates instant tension...", "Why being unpredictable makes you 10 times more attractive...").
-2. Tone: Sophisticated, magnetic, intriguing, psychologically insightful, and respectful.
-3. STRICT SAFETY: NO pornography, NO graphic sexual depictions, NO explicit anatomy, NO harassment, and NO harmful manipulation. Keep content seductive, glamorous, psychological, and fully compliant with YouTube and Instagram Community Guidelines.
+1. Scene 1 hook MUST stop the scroll in under 1.5 seconds with intense romantic intrigue or seductive curiosity (e.g. "The 3-second glance that makes someone instantly crave your presence...", "Why quiet confidence in a silk dress commands any room...").
+2. Tone: Bold, extremely seductive, sophisticated, magnetic, and emotionally intense.
+3. STRICT POLICY COMPLIANCE: All characters are adults aged 25+. NO pornography, NO graphic sexual depictions, NO visible nudity, NO non-consensual content. Keep all visuals artistic, lingerie-inspired with full coverage, and 100% compliant with YouTube and Instagram Community Guidelines.
 
 Return ONLY JSON:
 {{
   "topic": "precise topic name",
-  "title": "high-CTR curiosity title under 75 characters with romantic emoji",
-  "angle": "the psychological secret or tension trigger",
+  "title": "high-CTR curiosity title under 75 characters with seductive emoji",
+  "angle": "the psychological secret, visual allure, or tension trigger",
   "style": "allure" | "chemistry" | "mystery" | "charm" | "seduction" | "romance",
   "category": "{category}",
-  "virality_score": 9.5
+  "virality_score": 9.6
 }}"""
 
         validator = lambda d: isinstance(d, dict) and bool(d.get("topic")) and bool(d.get("title"))
         data = self.reason_json(prompt, validator, rounds=2)
 
         if not data:
-            # Resilient romantic allure fallback topics
+            # Resilient adult glamour and sensual allure fallback topics
             fallback_topics = [
-                ("The 3-Second Eye Contact Technique", "The 3-Second Eye Contact Trick That Sparks Instant Tension 👀✨", "chemistry", "attraction & seduction psychology"),
-                ("The Psychology of Romantic Mystery", "Why Being Unpredictable Makes You Irresistibly Addictive 🖤", "mystery", "dark romance & mystery aesthetics"),
-                ("The Triangles Method of Seduction", "The Subtle Glancing Law That Creates Magnetic Attraction 💋", "seduction", "flirting psychology & charm secrets"),
-                ("The Unspoken Body Language of Chemistry", "Signs of Intense Unspoken Attraction You Can't Fake ⚡", "allure", "relationship chemistry & presence"),
-                ("The Art of Conversational Charm", "How To Make Anyone Feel Deeply Drawn To You 🌹", "charm", "dating dynamics & romantic secrets"),
+                ("The 3-Second Eye Contact Technique", "The 3-Second Seduction Glaze That Sparks Instant Chemistry 👀🔥", "seduction", "attraction & seduction psychology"),
+                ("The Psychology of Seductive Mystery", "Why Unpredictable Sensual Allure Is Completely Addictive 🖤✨", "mystery", "dark romance & mystery aesthetics"),
+                ("The Art of Romantic Tension", "Subconscious Signals That Make You Irresistibly Magnetic 💋🌹", "allure", "relationship chemistry & presence"),
+                ("Sensual Body Language & Presence", "The Subtle Movements That Command Deep Romantic Desire ⚡", "chemistry", "flirting psychology & charm secrets"),
+                ("Intimate Midnight Rendezvous Psychology", "How Magnetic Presence In Luxury Settings Creates Obsession 🥂", "romance", "dating dynamics & romantic secrets"),
             ]
             pick = random.choice(fallback_topics)
             data = {
                 "topic": pick[0],
                 "title": pick[1],
-                "angle": "Exploring the subconscious psychological dynamics that create intense romantic attraction.",
+                "angle": "Exploring the bold psychological and sensual dynamics of intense romantic attraction.",
                 "style": pick[2],
                 "category": pick[3],
-                "virality_score": 9.3,
+                "virality_score": 9.5,
             }
 
         return data
 
     # ---------------------------------------------------------
-    # Capability 2: Scene-by-Scene Script Generation (Magnetic & Alluring)
+    # Capability 2: Scene-by-Scene Script Generation (Glamour & Seduction)
     # ---------------------------------------------------------
     def plan_script(self, topic_info: Dict[str, Any], format_type: str = "short") -> Dict[str, Any]:
         """Generates a complete scene-by-scene script with visual queries and narration."""
         num_scenes = 4 if format_type == "short" else 6
 
-        prompt = f"""You are the master screenwriter for a viral, magnetic Short/Reel about romantic attraction and dating psychology.
+        prompt = f"""You are a professional adult glamour filmmaker, sensual video director, and cinematic AI content creator.
 Topic: {topic_info['topic']}
 Title: {topic_info['title']}
 Style: {topic_info.get('style', 'allure')}
 Format: {format_type}
 
+DIRECTOR'S VISUAL GUIDELINES FOR EACH SCENE:
+- All models are fictional adults aged 25 and above.
+- Extremely glamorous and alluring adult models with sensual expressions and confident body language.
+- Revealing but non-explicit fashion: elegant lingerie-inspired silk robes, satin slips, lace couture with full coverage (NO visible nudity).
+- Sensual dancing and graceful movements.
+- Romantic bedroom and luxury hotel settings, candlelit ambiance, intimate romantic atmosphere with artistic implied intimacy.
+- Beautiful close-up portraits, dramatic chiaroscuro lighting, rich shadows, and realistic skin textures.
+- Professional cinematic camera movements (slow dolly push, shallow f/1.4 depth of field, 35mm film aesthetic).
+
 Write exactly {num_scenes} sequential narration scenes designed for viral audience retention.
 Pacing Rules:
-- Scene 1 MUST be an instant scroll-stopping hook under 12 words that triggers curiosity about attraction or chemistry.
-- Each scene must be punchy, rhythmic, and alluring (15-22 words max per scene).
-- Speak with calm, confident, magnetic elegance directly to the viewer.
+- Scene 1 MUST be an instant scroll-stopping hook under 12 words triggering intense curiosity about attraction, romance, or chemistry.
+- Each scene must be punchy, rhythmic, seductive, and alluring (15-22 words max per scene).
+- Speak with calm, confident, magnetic, and seductive elegance directly to the viewer.
 - Total narration word count: {90 if format_type == 'short' else 140} words.
-- Provide 2-3 specific visual search terms per scene for cinematic romantic stock footage (e.g. "couple candlelit date night", "romantic evening dress slow motion", "intense eye contact cinematic", "luxury wine bar couple", "silhouette couple sunset").
-- Provide 1 'image_prompt' per scene for photorealistic romantic illustration (vertical 9:16 composition, 8k cinematic lighting, moody candlelit romance, elegant date night atmosphere).
+- Provide 2-3 specific visual search terms per scene for cinematic glamour stock footage (e.g. "glamorous woman silk dress slow motion", "sensual couple romantic bedroom candlelit", "elegant model luxury hotel suite portrait", "close up eye contact sensual lighting", "sensual dancing silhouette night").
+- Provide 1 'image_prompt' per scene for photorealistic 8k vertical illustration:
+  Specify fictional adult model aged 25+, lingerie-inspired haute couture silk fashion with full coverage, intimate warm candlelit luxury hotel bedroom or penthouse lounge, soft chiaroscuro shadows, realistic skin texture with visible pores, shallow depth of field f/1.4, 35mm photograph, vertical 9:16 portrait. STRICTLY NO visible nudity or graphic depictions.
 
 Return ONLY JSON:
 {{
   "topic": "{topic_info['topic']}",
   "title": "{topic_info['title']}",
-  "description": "Magnetic 2-sentence description summarizing this attraction insight.",
-  "hashtags": ["#attraction", "#datingtips", "#psychology", "#romance", "#chemistry", "#allure"],
+  "description": "Magnetic, seductive description summarizing this attraction insight.",
+  "hashtags": ["#attraction", "#glamour", "#datingtips", "#romance", "#chemistry", "#allure", "#seduction"],
   "scenes": [
     {{
       "text": "spoken narration for this scene",
-      "search_terms": ["romantic candlelit date", "couple eye contact slow motion"],
-      "image_prompt": "cinematic 8k vertical shot, glamorous couple sharing an intense glance across a luxury candlelit lounge, soft moody lighting, 35mm photography, 9:16 portrait"
+      "search_terms": ["glamorous woman silk dress slow motion", "romantic candlelit luxury bedroom"],
+      "image_prompt": "cinematic 8k vertical portrait of a stunning 26-year-old fictional woman in an elegant satin silk slip dress in a luxury candlelit hotel suite, intimate warm amber rim lighting, soft shadows, realistic skin pores, 35mm photo, f/1.4, 9:16 composition"
     }}
   ]
 }}"""
@@ -289,32 +310,32 @@ Return ONLY JSON:
         script = self.reason_json(prompt, validator, rounds=2)
 
         if not script:
-            # Resilient alluring fallback script
+            # Resilient alluring fallback script with adult glamour aesthetic
             script = {
                 "topic": topic_info["topic"],
                 "title": topic_info["title"],
-                "description": f"Exploring {topic_info['topic']} with psychological insight and magnetic romantic allure.",
-                "hashtags": ["#attraction", "#datingtips", "#psychology", "#romance", "#chemistry", "#allure"],
+                "description": f"Exploring {topic_info['topic']} with bold seductive insight and cinematic glamour.",
+                "hashtags": ["#attraction", "#glamour", "#datingtips", "#romance", "#chemistry", "#allure", "#seduction"],
                 "scenes": [
                     {
-                        "text": "The most intense attraction never starts with words. It starts in the silence between two people.",
-                        "search_terms": ["romantic date night candlelight", "intense eye contact cinematic"],
-                        "image_prompt": "moody 8k cinematic photo, glamorous couple making subtle eye contact across a dimly lit wine bar, warm amber glow, 9:16"
+                        "text": "The most intoxicating attraction never announces itself. It lingers in the quiet air between two people.",
+                        "search_terms": ["glamorous woman silk dress slow motion", "luxury hotel suite intimate candlelit"],
+                        "image_prompt": "cinematic 8k vertical portrait of an alluring 27-year-old fictional woman in a black silk robe lounging on a velvet chaise in a luxury penthouse, warm amber candlelight, realistic skin texture, 35mm film grain, 9:16"
                     },
                     {
-                        "text": "When you hold eye contact for just three seconds and break it with a subtle smile, their subconscious sparks instantly.",
-                        "search_terms": ["couple candlelit evening slow motion", "glamorous woman cocktail dress"],
-                        "image_prompt": "elegant woman in satin evening dress smiling mysteriously, Parisian luxury restaurant background, 9:16"
+                        "text": "When you hold someone's gaze for three breathless seconds, their pulse accelerates before their mind can catch up.",
+                        "search_terms": ["close up eye contact sensual lighting", "sensual couple romantic bedroom candlelit"],
+                        "image_prompt": "intimate close up portrait of a captivating 26-year-old fictional woman with intense alluring gaze, subtle sensual smile, soft bedroom lamp glow, detailed skin texture, shallow f/1.4 depth of field, 9:16"
                     },
                     {
-                        "text": "Mystery creates dopamine. When you don't reveal everything at once, their mind fills in the blanks with desire.",
-                        "search_terms": ["couple walking city night rain", "silhouette couple romantic sunset"],
-                        "image_prompt": "cinematic silhouette of couple walking under umbrella in glowing rainy city street at night, 9:16"
+                        "text": "True allure isn't about giving everything away. It is the exquisite art of making them crave what you keep secret.",
+                        "search_terms": ["sensual slow dance silhouette", "elegant model luxury hotel suite portrait"],
+                        "image_prompt": "cinematic 8k shot of an elegant fictional adult couple in glamorous evening attire sharing an intimate slow dance on a moonlit Parisian balcony, soft bokeh city lights, 9:16"
                     },
                     {
-                        "text": "Master the art of unspoken chemistry, and follow for more daily psychology secrets.",
-                        "search_terms": ["romantic rooftop sunset couple", "luxury candlelight lounge champagne"],
-                        "image_prompt": "romantic rooftop terrace at twilight, couple holding champagne flutes looking at city lights, 9:16"
+                        "text": "Master the silent psychology of seduction. Follow now to unlock your most magnetic presence.",
+                        "search_terms": ["glamorous woman bedroom portrait cinematic", "romantic rooftop sunset couple"],
+                        "image_prompt": "striking vertical 9:16 portrait of a glamorous 28-year-old fictional woman in an emerald satin gown raising a champagne flute in a luxury candlelit lounge, elegant confident expression, 8k cinematic lighting"
                     },
                 ],
             }

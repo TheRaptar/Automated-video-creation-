@@ -91,23 +91,31 @@ def pick_seconds(env_name: str, default: str) -> int:
 
 
 DEFAULT_CATEGORIES = [
-    "attraction & seduction psychology",
-    "dating dynamics & romantic secrets",
-    "magnetic allure & sensual aesthetics",
-    "flirting psychology & charm secrets",
-    "relationship chemistry & presence",
-    "dark romance & mystery aesthetics",
+    "Horror & Supernatural Thrillers",
+    "Children's Whimsical Fables & Adventures",
+    "Adult Psychological Thrillers & Sci-Fi",
+    "Ancient Myths, Legends & Epic Lore",
+    "Dark Folklore & Urban Legends",
+    "Scientific Mysteries Transformed into Stories",
+    "Entertaining Fictional Mysteries",
 ]
 CATEGORIES = [c.strip() for c in os.environ.get("CATEGORIES", "").split(",") if c.strip()] or DEFAULT_CATEGORIES
 
-# High-engagement romantic allure & attraction Short styles:
+# Dynamic narrative storytelling styles across different target audiences:
 STYLES = {
-    "allure": "Magnetic allure & sensual tension: exploring what makes someone deeply captivating.",
-    "chemistry": "Romantic chemistry trigger: how unspoken dynamics and eye contact spark instant connection.",
-    "mystery": "Dark romance & enigma: why subtle emotional distance and unpredictability create obsession.",
-    "charm": "High-level charm: conversational and body language techniques that captivate anyone.",
-    "seduction": "Seduction psychology: the subconscious laws of desire and irresistible presence.",
-    "romance": "Sensual romantic aesthetics: candlelit moments, deep chemistry, and cinematic intimacy.",
+    "horror": "Supernatural horror & creepypasta: eerie dread, atmospheric suspense, and shocking dark twists.",
+    "fable": "Children's storybook fable: whimsical magic, friendly characters, wonder-filled science, and uplifting morals.",
+    "thriller": "Adult psychological thriller: high-stakes tension, hidden motives, and gripping dramatic twists.",
+    "scifi": "Mind-bending sci-fi fiction: speculative science anomalies, time loops, and cosmic mysteries.",
+    "legend": "Epic mythology & folklore: ancient lore, forgotten civilizations, and legendary heroic sagas.",
+    "mystery": "Unraveling enigmatic fiction: sudden revelations, hidden clues, and clever narrative twists.",
+    "allure": "Magnetic allure & psychological intrigue.",
+    "chemistry": "Emotional dynamics & chemistry.",
+    "charm": "Clever wit and charisma.",
+    "seduction": "Seductive suspense and intrigue.",
+    "romance": "Sensual romance and aesthetics.",
+    "fact": "Fact-based storytelling with dramatic narrative.",
+    "story": "Illustrated storybook visual narrative.",
 }
 
 FONT_CANDIDATES = [
@@ -384,40 +392,44 @@ def generate_short(topic, history, state) -> dict:
     else:
         style_key = weighted_choice([k for k in STYLES if k != state.get("last_style")] or list(STYLES),
                                     state.get("weights", {}).get("style", {}))
-    prompt = f"""You are a professional adult glamour filmmaker, sensual video director, and cinematic AI content creator.
-You create bold, extremely seductive, and visually captivating YouTube Shorts and Instagram Reels featuring fictional adult characters aged 25 and above.
+    profile = RaptarAgent.get_audience_profile(category or style_key) if RaptarAgent else {
+        "target_audience": "adults", "style": style_key, "voice": TTS_VOICE, "rate": "+2%",
+        "tone": "gripping and suspenseful", "subtitle_color": "white",
+        "art_style": "cinematic 8k", "guidelines": "gripping storytelling"
+    }
+    prompt = f"""You are a master storyteller, creative narrative director, and cinematic AI fiction creator.
+Your goal is to transform scientific concepts, educational ideas, real-world phenomena, or creative prompts into captivating storytelling content tailored for: {profile['target_audience']}.
 
-DIRECTOR'S VISUAL & ARTISTIC STYLE:
-- Extremely glamorous and alluring adult models (all characters strictly fictional adults aged 25+).
-- Sensual expressions, magnetic eye contact, and confident, captivating body language.
-- Revealing but non-explicit fashion: elegant lingerie-inspired silk robes, satin slips, lace couture with full coverage (NO visible nudity).
-- Sensual dancing and slow, graceful, hypnotic movements.
-- Romantic bedroom and luxury hotel settings: candlelit suites, silk bedding, penthouse terrace at twilight, velvet lounge.
-- Intimate romantic atmosphere with artistic implied intimacy and full coverage.
-- Beautiful, arresting close-up portraits with dramatic cinematic lighting, rich warm shadows, realistic skin textures, and 35mm film grain.
-- Professional camera movements (slow dolly push, shallow f/1.4 depth of field, gentle panning).
+Genre Style: {STYLES.get(style_key, style_key)}
+Target Audience: {profile['target_audience']}
+Tone & Pacing: {profile['tone']}
+Audience Guidelines: {profile['guidelines']}
 
 {topic_line}
-Video style: {STYLES[style_key]}
 {_trend_hint(state)}
 
 Return ONLY JSON with this exact shape:
 {{
-  "topic": "short name of the chosen topic",
-  "title": "high-CTR curiosity title under 65 characters with seductive emoji",
-  "description": "Bold, seductive 1-2 sentence description",
-  "hashtags": ["#attraction", "#glamour", "#datingtips", "#romance", "#chemistry", "#allure", "#seduction"],
-  "scenes": [{{"text": "narration for this scene", "search_terms": ["cinematic glamour query 1", "cinematic glamour query 2"]}}]
+  "topic": "short name of the chosen story",
+  "title": "high-CTR curiosity title under 65 characters with narrative emoji",
+  "description": "Engaging 1-2 sentence story description",
+  "hashtags": ["#story", "#{profile['target_audience']}", "#{style_key}", "#viral"],
+  "target_audience": "{profile['target_audience']}",
+  "style": "{style_key}",
+  "voice_profile": {{"voice": "{profile['voice']}", "rate": "{profile['rate']}"}},
+  "subtitle_color": "{profile['subtitle_color']}",
+  "scenes": [{{"text": "narration for this scene", "search_terms": ["cinematic visual query 1", "cinematic visual query 2"]}}]
 }}
 Rules:
 - {lo} to {lo + 2} scenes, about {total} seconds in total (roughly {int(words * 0.9)} words of narration).
-- Each scene: 1-2 punchy, rhythmic, seductive sentences (under 20 words). Speak directly to "you" with calm, magnetic, sensual elegance.
-- Scene 1 is an INSTANT scroll-stopping hook under 12 words triggering intense curiosity about attraction, romance, or chemistry. Do NOT start with "Did you know" or "Imagine".
-- Provide a psychological attraction insight with a memorable, seductive romantic payoff in the final scenes.
-- The last scene ends with a smooth line inviting viewers to follow for daily attraction and seduction secrets.
-- STRICT POLICY COMPLIANCE: All characters are adults aged 25+. NO visible nudity, NO graphic sexual depictions, NO non-consensual content. Keep it seductive, lingerie-inspired with full coverage, and 100% compliant with YouTube and Instagram Community Guidelines.
-- search_terms: 2 DIFFERENT concrete, cinematic glamour stock-footage queries per scene
-  (e.g. "glamorous woman silk dress slow motion", "sensual couple romantic bedroom candlelit", "elegant model luxury hotel suite portrait", "close up eye contact sensual lighting", "sensual dancing silhouette night"). Never abstract words, names, or brands."""
+- Language & Tone: Strictly calibrated for '{profile['target_audience']}':
+  - If children: Warm, friendly, wonder-filled language, friendly characters, positive lesson.
+  - If horror: Ominous, suspenseful, atmospheric dread, spine-tingling plot twist.
+  - If adults: Sophisticated, sharp, intellectual tension, thought-provoking twist.
+  - If legend: Theatrical, epic lore, mythic grandeur.
+- Scene 1 is an INSTANT scroll-stopping narrative hook under 12 words establishing mystery, wonder, or danger.
+- The last scene ends with a captivating line inviting viewers to follow for the next story.
+- search_terms: 2 DIFFERENT concrete, cinematic visual queries per scene matching the genre."""
     data = llm_json(prompt, rounds=2, valid=_valid_scenes)
     if not data:
         sys.exit("Could not get a script from Gemini or Groq (services busy or keys invalid).")
@@ -425,7 +437,9 @@ Rules:
     new = _review_texts(script["title"], [s["text"] for s in script["scenes"]])
     for sc, t in zip(script["scenes"], new):
         sc["text"] = t
-    script.update(category=category, style=style_key)
+    script.update(category=category, style=style_key, target_audience=profile["target_audience"],
+                  voice_profile=script.get("voice_profile", {"voice": profile["voice"], "rate": profile["rate"]}),
+                  subtitle_color=profile.get("subtitle_color", "white"))
     return script
 
 
@@ -536,34 +550,33 @@ def _trend_hint(state: dict) -> str:
 
 
 def generate_story(topic, history, state) -> dict:
-    """An original illustrated 'animated storybook' Short that teaches one true fact."""
+    """An original illustrated story Short tailored for children, horror fans, or adult fiction audiences."""
     total = pick_seconds("VIDEO_SECONDS", "40-60")
-    if OFFLINE:
-        STORY.update(art_style="cinematic 8k glamour photography, warm chiaroscuro lighting, luxury hotel suite, 35mm film",
-                     characters="fictional 26-year-old adult woman, alluring expression, satin silk slip dress with full coverage")
-        return _normalize({
-            "topic": "offline glamour story test", "title": "The Art of Seductive Allure", "description": "Cinematic visual exploration of romantic chemistry.",
-            "hashtags": ["#glamour", "#attraction", "#seduction", "#cinematic"], "category": None, "style": "story",
-            "scenes": [{"text": "In a luxury Parisian hotel at midnight, attraction needs no words.",
-                        "image_prompt": "cinematic 8k vertical portrait of alluring 26-year-old fictional woman in satin silk dress lounging on chaise in luxury candlelit suite, warm amber shadows, 9:16"},
-                       {"text": "A lingering glance and confident presence can command the entire room.",
-                        "image_prompt": "close up sensual portrait of fictional woman with intense captivating gaze, subtle smile, soft rim lighting, shallow f/1.4 depth of field, 9:16"},
-                       {"text": "Master the art of magnetic romance. Follow for more daily secrets.",
-                        "image_prompt": "striking vertical 9:16 shot of glamorous couple sharing an intimate slow dance on a moonlit terrace overlooking city lights, 8k"}]})
-    n_lo = max(7, total // 7)
     topic_line, category = _topic_line(topic, history, state, False)
-    prompt = f"""You are a professional adult glamour filmmaker, sensual video director, and cinematic AI content creator.
-You write bold, seductive, and visually captivating short cinematic stories for YouTube Shorts and Instagram Reels featuring fictional adult characters aged 25 and above.
+    profile = RaptarAgent.get_audience_profile(category or "story") if RaptarAgent else {
+        "target_audience": "all_ages", "style": "story", "voice": TTS_VOICE, "rate": "+2%",
+        "tone": "gripping and imaginative", "subtitle_color": "white",
+        "art_style": "cinematic 8k storytelling, rich atmospheric lighting, 35mm film",
+        "guidelines": "captivating fictional storytelling"
+    }
+    if OFFLINE:
+        STORY.update(art_style=profile["art_style"], characters="main character in distinctive attire")
+        return _normalize({
+            "topic": "offline story test", "title": "The Whispering Mystery", "description": "Offline story demonstration.",
+            "hashtags": ["#story", f"#{profile['target_audience']}", "#fictional"], "category": None, "style": "story",
+            "scenes": [{"text": "In an ancient forest bathed in starlight, a strange discovery was waiting.",
+                        "image_prompt": "cinematic vertical shot of ancient enchanted forest with starlight filtering through canopy, 9:16"},
+                       {"text": "A glowing silver key turned in an invisible lock, revealing a forgotten doorway.",
+                        "image_prompt": "close-up of floating glowing silver key unlocking a shimmering doorway between trees, 9:16"},
+                       {"text": "Step into the mystery, and follow for tomorrow's chapter.",
+                        "image_prompt": "dramatic shot of figure stepping through luminous portal into another realm, 9:16"}]})
+    n_lo = max(7, total // 7)
+    prompt = f"""You are a master storyteller, creative narrative director, and cinematic AI fiction creator.
+You write captivating, original short fictional stories for YouTube Shorts and Instagram Reels tailored for: {profile['target_audience']}.
 
-DIRECTOR'S VISUAL & ARTISTIC STYLE:
-- Extremely glamorous and alluring adult models (all characters strictly fictional adults aged 25+).
-- Sensual expressions, magnetic eye contact, and confident, captivating body language.
-- Revealing but non-explicit fashion: elegant lingerie-inspired silk robes, satin slips, lace couture with full coverage (NO visible nudity).
-- Sensual dancing and slow, graceful, hypnotic movements.
-- Romantic bedroom and luxury hotel settings: candlelit suites, silk bedding, penthouse terrace at twilight, velvet lounge.
-- Intimate romantic atmosphere with artistic implied intimacy and full coverage.
-- Beautiful, arresting close-up portraits with dramatic cinematic lighting, rich warm shadows, realistic skin textures, and 35mm film grain.
-- Professional camera movements (slow dolly push, shallow f/1.4 depth of field, gentle panning).
+Target Audience: {profile['target_audience']}
+Tone & Pacing: {profile['tone']}
+Audience Guidelines: {profile['guidelines']}
 
 {topic_line}
 {_trend_hint(state)}
@@ -571,45 +584,51 @@ DIRECTOR'S VISUAL & ARTISTIC STYLE:
 Return ONLY JSON with this exact shape:
 {{
   "topic": "short name of the topic",
-  "title": "curiosity-driven seductive title under 60 characters",
+  "title": "curiosity-driven story title under 60 characters",
   "description": "1-2 sentence alluring description",
-  "hashtags": ["#glamour", "#attraction", "#datingtips", "#romance", "#chemistry", "#allure", "#seduction"],
-  "art_style": "cinematic 8k photography, warm chiaroscuro candlelit lighting, luxury boutique hotel suite, 35mm film grain, shallow depth of field f/1.4",
-  "characters": "one sentence describing the recurring fictional adult character (aged 25+, alluring styling, satin silk lingerie-inspired dress with full coverage)",
-  "scenes": [{{"text": "narration, 1-2 short seductive sentences", "image_prompt": "detailed 8k vertical shot description: fictional adult character aged 25+, satin silk slip with full coverage, luxury bedroom or candlelit lounge, sensual expression, 9:16", "search_terms": ["glamorous woman silk dress slow motion"]}}]
+  "hashtags": ["#story", "#{profile['target_audience']}", "#fiction", "#viral"],
+  "art_style": "{profile['art_style']}",
+  "characters": "one sentence describing the look of the recurring fictional character",
+  "scenes": [{{"text": "narration, 1-2 short sentences", "image_prompt": "detailed vertical 9:16 prompt reflecting the {profile['target_audience']} art style", "search_terms": ["cinematic fallback query"]}}]
 }}
 Rules:
 - {n_lo} to {n_lo + 2} scenes, about {total} seconds of narration in total.
-- Arc: seductive hook, emotional tension, magnetic chemistry, climax, and closing call to action.
-- STRICT POLICY COMPLIANCE: All characters are fictional adults aged 25+. NO visible nudity, NO graphic sexual depictions, NO non-consensual content. Full coverage only, compliant with YouTube and Instagram Community Guidelines.
+- Arc: captivating hook, rising tension/wonder, emotional or spooky turning point, climax, and closing call to action.
+- Calibrate language and visuals strictly for '{profile['target_audience']}'.
 - image_prompt must never ask for text, letters, logos or signs inside the picture."""
     data = llm_json(prompt, rounds=2, valid=lambda d: _valid_scenes(d, 5))
     if not data:
         sys.exit("Could not get a story script from Gemini or Groq.")
     script = _normalize(data)
-    STORY.update(art_style=str(data.get("art_style") or "cinematic 8k photography, warm chiaroscuro lighting, luxury hotel suite, 35mm film grain"),
-                 characters=str(data.get("characters") or "fictional 26-year-old adult woman, alluring expression, elegant satin silk slip with full coverage"))
+    STORY.update(art_style=str(data.get("art_style") or profile["art_style"]),
+                 characters=str(data.get("characters") or "main fictional character"))
     for sc in script["scenes"]:
         sc["image_prompt"] = str(sc.get("image_prompt") or sc["text"])
-    script.update(category=category, style="story")
+    script.update(category=category, style="story", target_audience=profile["target_audience"],
+                  voice_profile=script.get("voice_profile", {"voice": profile["voice"], "rate": profile["rate"]}),
+                  subtitle_color=profile.get("subtitle_color", "white"))
     return script
 
 
 # ------------------------------------------------------------ 2. voice
-async def _tts(text: str, path: Path) -> None:
+async def _tts(text: str, path: Path, voice: str = None, rate: str = None) -> None:
     import edge_tts
-    await edge_tts.Communicate(text, TTS_VOICE, rate="+5%").save(str(path))
+    v = voice or TTS_VOICE
+    r = rate or "+3%"
+    await edge_tts.Communicate(text, v, rate=r).save(str(path))
 
 
-def make_voice(text: str, path: Path) -> float:
+def make_voice(text: str, path: Path, voice_profile: dict = None) -> float:
     if OFFLINE:  # silent audio, roughly 0.4s per word
         secs = max(1.5, 0.4 * len(text.split()))
         run(["ffmpeg", "-y", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
              "-t", f"{secs:.2f}", "-c:a", "libmp3lame", str(path)])
         return media_duration(path)
+    voice = (voice_profile or {}).get("voice") if isinstance(voice_profile, dict) else None
+    rate = (voice_profile or {}).get("rate") if isinstance(voice_profile, dict) else None
     for attempt in range(3):
         try:
-            asyncio.run(_tts(text, path))
+            asyncio.run(_tts(text, path, voice=voice, rate=rate))
             return media_duration(path)
         except Exception as e:
             print(f"TTS attempt {attempt + 1} failed: {e}")
@@ -663,19 +682,35 @@ def _pexels(query: str, dest: Path, used: set) -> bool:
     return True
 
 
-def _gradient(dest: Path, seconds: float) -> None:
-    """Last-resort background so a video is ALWAYS produced, even if stock search fails."""
-    # Seductive deep velvet burgundy, dark champagne amber, and midnight sapphire tones
-    c0 = "0x%06x" % random.randint(0x1a0510, 0x3d0d20)
-    c1 = "0x%06x" % random.randint(0x2a0d18, 0x5a1830)
+def _gradient(dest: Path, seconds: float, style: str = "") -> None:
+    """Last-resort background with color palettes tailored to the storytelling genre."""
+    if style == "horror":
+        # Eerie pitch black void to blood-tinged charcoal shadow
+        c0 = "0x%06x" % random.randint(0x05050a, 0x14050a)
+        c1 = "0x%06x" % random.randint(0x150505, 0x2e0808)
+    elif style == "fable":
+        # Whimsical cheerful sky blue to pastel magical violet
+        c0 = "0x%06x" % random.randint(0x205090, 0x4070b0)
+        c1 = "0x%06x" % random.randint(0x904070, 0xb06090)
+    elif style == "legend":
+        # Ancient mythic gold and parchment bronze
+        c0 = "0x%06x" % random.randint(0x302010, 0x503515)
+        c1 = "0x%06x" % random.randint(0x503010, 0x754520)
+    else:
+        # Cinematic neo-noir deep navy to moody amber
+        c0 = "0x%06x" % random.randint(0x0a1020, 0x182434)
+        c1 = "0x%06x" % random.randint(0x1a1525, 0x2e1e30)
     run(["ffmpeg", "-y", "-f", "lavfi",
          "-i", f"gradients=s={W}x{H}:c0={c0}:c1={c1}:duration={seconds:.1f}:speed=0.03:rate={FPS}",
          "-c:v", "libx264", "-pix_fmt", "yuv420p", str(dest)])
 
 
-def fetch_clip(query: str, dest: Path, used: set, seconds: float) -> None:
+def fetch_clip(query: str, dest: Path, used: set, seconds: float, style: str = "") -> None:
     if not OFFLINE:
-        for q in (query, " ".join(query.split()[:2]), "candlelight romantic", "glamorous couple"):
+        fallbacks = ("creepy shadows", "foggy night") if style == "horror" else (
+            ("cute cartoon animation", "magical starry sky") if style == "fable" else ("cinematic night city", "mysterious lighting")
+        )
+        for q in (query, " ".join(query.split()[:2]), *fallbacks):
             for provider in (_pexels, _pixabay):
                 try:
                     if provider(q, dest, used):
@@ -683,18 +718,18 @@ def fetch_clip(query: str, dest: Path, used: set, seconds: float) -> None:
                 except Exception as e:
                     print(f"  {provider.__name__} failed for '{q}': {e}")
     print(f"  using gradient background for '{query}'")
-    _gradient(dest, seconds + 1)
+    _gradient(dest, seconds + 1, style=style)
 
 
 # ------------------------------------------------------------ 4. assembly
-def make_visual(idx: int, terms: list[str], total: float, used: set) -> Path:
+def make_visual(idx: int, terms: list[str], total: float, used: set, style: str = "") -> Path:
     """Picture track of one scene, built from several short clips (a cut every few seconds)."""
     n = max(1, min(5, round(total / CLIP_LEN)))
     seg_len = total / n
     segs = []
     for k in range(n):
         raw = WORK / f"raw_{idx}_{k}.mp4"
-        fetch_clip(terms[k % len(terms)], raw, used, seg_len + 0.5)
+        fetch_clip(terms[k % len(terms)], raw, used, seg_len + 0.5, style=style)
         seg = WORK / f"seg_{idx}_{k}.mp4"
         run(["ffmpeg", "-y", "-stream_loop", "-1", "-i", str(raw), "-t", f"{seg_len:.2f}",
              "-vf", f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},setsar=1,fps={FPS}",
@@ -837,17 +872,18 @@ def _drawtext(font: str, textfile: Path, style: str, enable: str) -> str:
             f":{style}:enable='{enable}'")
 
 
-def build_scene(idx: int, text: str, visual: Path, audio: Path, dur: float, font: str, heading=None) -> Path:
+def build_scene(idx: int, text: str, visual: Path, audio: Path, dur: float, font: str, heading=None, style_meta: dict = None) -> Path:
     total = dur + 0.25
     filters = []
     if CAPTIONS:                                        # Shorts: high-energy kinetic typography
+        highlight_color = (style_meta or {}).get("subtitle_color", "0x00E5FF") if isinstance(style_meta, dict) else "0x00E5FF"
+        shadow_color = (style_meta or {}).get("subtitle_shadow", "black@0.85") if isinstance(style_meta, dict) else "black@0.85"
         for n, (chunk, start, end) in enumerate(caption_chunks(text, dur)):
             tf = WORK / f"cap_{idx}_{n}.txt"
             tf.write_text(chunk.upper(), encoding="utf-8")
-            # Alternating Vibrant Rose Crimson (0xFF3366) and Diamond White for romantic allure aesthetic
-            color = "0xFF3366" if n % 2 == 1 else "white"
+            color = highlight_color if n % 2 == 1 else "white"
             filters.append(_drawtext(font, tf, f"fontsize=82:fontcolor={color}:borderw=7:bordercolor=black"
-                                               f":shadowx=3:shadowy=3:shadowcolor=black@0.85"
+                                               f":shadowx=3:shadowy=3:shadowcolor={shadow_color}"
                                                f":x=(w-text_w)/2:y=h*0.58", f"between(t,{start:.2f},{end:.2f})"))
     if heading:                                         # long-form: chapter title card for a few seconds
         tf = WORK / f"head_{idx}.txt"
@@ -930,11 +966,18 @@ def main() -> None:
 
     used: set = set()
     scenes, chapters, elapsed, img_fail = [], [], 0.0, 0
+    voice_prof = script.get("voice_profile")
+    script_style = script.get("style", "")
+    style_meta = {
+        "subtitle_color": script.get("subtitle_color") or ("0x0000CC" if script_style == "horror" else ("0x00E5FF" if script_style == "fable" else "white")),
+        "subtitle_shadow": "0x000000" if script_style == "horror" else "black@0.85"
+    }
+
     for i, sc in enumerate(script["scenes"]):
         if i % 5 == 0 or fmt == "short":
             print(f"2-3/4 Scene {i + 1}/{len(script['scenes'])}: {sc['text'][:55]}")
         audio = WORK / f"voice_{i}.mp3"
-        dur = make_voice(sc["text"], audio)
+        dur = make_voice(sc["text"], audio, voice_profile=voice_prof)
         if sc.get("heading"):
             chapters.append((elapsed, sc["heading"]))
         visual = None
@@ -945,8 +988,8 @@ def main() -> None:
                 if img_fail >= 3 and img_fail == i + 1:
                     sys.exit("Image generation is not working (no provider answered) - aborting the story video.")
         if visual is None:
-            visual = make_visual(i, sc["search_terms"], dur + 0.25, used)
-        scenes.append(build_scene(i, sc["text"], visual, audio, dur, font, sc.get("heading")))
+            visual = make_visual(i, sc["search_terms"], dur + 0.25, used, style=script_style)
+        scenes.append(build_scene(i, sc["text"], visual, audio, dur, font, sc.get("heading"), style_meta=style_meta))
         elapsed += dur + 0.25
 
     if fmt == "story" and img_fail > len(script["scenes"]) * 0.2:

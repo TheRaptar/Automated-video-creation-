@@ -174,134 +174,213 @@ class RaptarAgent:
         history = self.load_history()
         state = self.load_state()
 
-        allure_default_niches = [
-            "attraction & seduction psychology",
-            "dating dynamics & romantic secrets",
-            "magnetic allure & sensual aesthetics",
-            "flirting psychology & charm secrets",
-            "relationship chemistry & presence",
-            "dark romance & mystery aesthetics",
+    # ---------------------------------------------------------
+    # Audience & Genre Story Profile Helper
+    # ---------------------------------------------------------
+    @staticmethod
+    def get_audience_profile(category_or_style: str = "") -> Dict[str, Any]:
+        """Returns the optimal voice, pace, language guidelines, and visual style for the target audience."""
+        lower = (category_or_style or "").lower()
+        if any(k in lower for k in ("child", "kid", "fable", "bedtime", "fairy")):
+            return {
+                "target_audience": "children",
+                "style": "fable",
+                "voice": "en-US-AnaNeural",
+                "rate": "+0%",
+                "tone": "whimsical, wonder-filled, friendly, and heartwarming",
+                "subtitle_color": "0x00E5FF",  # Sunny yellow / cyan highlight
+                "subtitle_shadow": "0x401040",
+                "art_style": "whimsical 3D animated storybook, Pixar-style vibrant colors, soft warm magical lighting, friendly stylized character design, 9:16 vertical",
+                "guidelines": "Use simple, imaginative, wonder-filled language. Focus on curiosity, friendly animal or fantasy characters, and positive uplifting lessons."
+            }
+        elif any(k in lower for k in ("horror", "spooky", "creepypasta", "ghost", "dark folklore", "supernatural", "eerie")):
+            return {
+                "target_audience": "horror",
+                "style": "horror",
+                "voice": "en-US-GuyNeural",
+                "rate": "-10%",
+                "tone": "ominous, spine-chilling, atmospheric dread, and shocking twists",
+                "subtitle_color": "0x0000CC",  # Blood crimson highlight
+                "subtitle_shadow": "0x000000",
+                "art_style": "cinematic atmospheric horror, chilling fog, moody chiaroscuro lighting, eerie abandoned interiors, 35mm film grain, analog suspense, 9:16 vertical",
+                "guidelines": "Build intense psychological dread, slow ominous suspense, whispered secrets, and unexpected hair-raising narrative twists. Keep content psychological without graphic violence."
+            }
+        elif any(k in lower for k in ("myth", "legend", "ancient", "epic", "folklore")):
+            return {
+                "target_audience": "all_ages",
+                "style": "legend",
+                "voice": "en-GB-RyanNeural",
+                "rate": "-3%",
+                "tone": "epic, theatrical, mythic grandeur, and legendary lore",
+                "subtitle_color": "0x20C0F0",  # Antique gold highlight
+                "subtitle_shadow": "0x111111",
+                "art_style": "epic fantasy matte painting, golden atmospheric glow, ancient ruins, mythic scale, cinematic 8k lighting, 9:16 vertical",
+                "guidelines": "Grand, legendary storytelling with ancient secrets, forgotten myths, mythic beasts, and theatrical presence."
+            }
+        else:
+            # Adult Fiction / Sci-Fi / Psychological Thriller
+            return {
+                "target_audience": "adults",
+                "style": "thriller",
+                "voice": "en-US-ChristopherNeural",
+                "rate": "+2%",
+                "tone": "sophisticated, high-stakes psychological suspense, and dramatic twists",
+                "subtitle_color": "white",
+                "subtitle_shadow": "0x111111",
+                "art_style": "hyper-realistic 8K cinematic neo-noir, rain-slicked city streets, moody ambient shadows, 35mm lens, 9:16 vertical",
+                "guidelines": "Sharp, gripping dialogue, intellectual stakes, moral dilemmas, and thought-provoking twists transforming science or mysteries into compelling fiction."
+            }
+
+    # ---------------------------------------------------------
+    # Capability 1: Trend Evaluation & Topic Formulation (Multi-Audience Storytelling)
+    # ---------------------------------------------------------
+    def evaluate_and_pick_topic(
+        self,
+        signals: Dict[str, Any],
+        categories: List[str],
+        format_type: str = "short",
+    ) -> Dict[str, Any]:
+        """Evaluates trends and formulates creative storytelling concepts for children, adults, or horror audiences."""
+        history = self.load_history()
+        state = self.load_state()
+
+        story_default_niches = [
+            "Children's Whimsical Fables & Bedtime Tales",
+            "Horror Stories & Supernatural Thrillers",
+            "Adult Psychological Thrillers & Noir Fiction",
+            "Scientific Mysteries Transformed into Fiction",
+            "Mind-Bending Sci-Fi & Speculative Tales",
+            "Ancient Myths, Folklore & Epic Legends",
+            "Entertaining Fictional Mysteries & Twists",
         ]
-        active_categories = categories or allure_default_niches
+        active_categories = categories or story_default_niches
 
         weights = state.get("weights", {})
         recent_cats = state.get("recent_categories", [])[-4:]
         available_cats = [c for c in active_categories if c not in recent_cats] or active_categories
 
-        # Weight-proportional category selection favoring high-engagement attraction niches
         cat_weights = weights.get("category", {})
         category = self.weighted_choice(available_cats, cat_weights)
+        profile = self.get_audience_profile(category)
 
         # Build prompt for Gemini Agent
         avoid_topics = "; ".join(history[-60:]) if history else "none"
-        prompt = f"""You are a professional adult glamour filmmaker, sensual video director, and cinematic AI content creator.
-You direct bold, extremely seductive, and visually captivating YouTube Shorts and Instagram Reels featuring fictional adult characters aged 25 and above.
-
-DIRECTOR'S VISUAL & ARTISTIC STYLE:
-- Extremely glamorous and alluring adult models (all characters strictly fictional adults aged 25+).
-- Sensual expressions, magnetic eye contact, and confident, captivating body language.
-- Revealing but non-explicit high-fashion outfits: elegant lingerie-inspired fashion, silk robes, satin slips, corsetry couture, backless evening wear (strictly full coverage, NO visible nudity).
-- Sensual dancing and slow, graceful, hypnotic movements.
-- Romantic bedroom and luxury hotel settings: candlelit luxury suites, silk bedding, penthouse terrace at twilight, velvet lounge.
-- Intimate romantic atmosphere with artistic implied intimacy and full coverage.
-- Beautiful, arresting close-up portraits with dramatic cinematic lighting, rich warm shadows, realistic skin textures, and 35mm film grain.
-- Professional camera movements (slow dolly push, shallow f/1.4 depth of field, gentle panning).
+        prompt = f"""You are a master storyteller, creative narrative director, and cinematic AI fiction creator.
+Your mission is to transform educational ideas, scientific wonders, real-world phenomena, and creative prompts into captivating storytelling content for specific target audiences.
 
 Target Category: {category}
+Target Audience: {profile['target_audience']}
+Genre Style: {profile['style']}
+Tone & Pacing: {profile['tone']}
 Target Video Format: {format_type} (short: 30-50s fast-paced viral Short, story: 45-60s cinematic narrative)
+
+Audience Guidelines:
+- If Target Audience is 'children': Write whimsical fables, magical adventures, or wonder-filled tales explaining how things work through lovable characters, playful magic, and heartwarming morals.
+- If Target Audience is 'horror': Write spine-chilling supernatural creepypastas, eerie urban legends, psychological dread, haunted encounters, and terrifying plot twists based on eerie anomalies or strange real phenomena.
+- If Target Audience is 'adults': Write sophisticated psychological thrillers, dark sci-fi speculative fiction, thought-provoking moral dilemmas, or noir mysteries where science/logic unravels.
+- If Target Audience is 'all_ages' (legend): Write epic mythological folklore, legendary battles of wit, and ancient historical sagas.
 
 Avoid repeating or closely resembling any of these recent topics:
 {avoid_topics}
 
-Formulate ONE original, irresistible, high-virality concept exploring romantic attraction, sensual chemistry, or intimate dating psychology.
-Core Themes to Draw From:
-- Magnetic Allure & Seduction: Intense eye-contact tension, subconscious chemistry triggers, whisper dynamics, proximity psychology.
-- Sensual Romance & Intimate Tension: Late-night bedroom talks, luxury hotel rendezvous, the chemistry of lingering touch, unspoken desires.
-- Playful Charm & Flirting Secrets: Playful teasing, verbal chemistry, building romantic tension, confident allure.
-- Dark Romance & Mystery: The irresistible draw of emotional mystery, quiet elegance, magnetic presence.
+Formulate ONE original, irresistible, creative story concept with a gripping narrative hook, rising suspense/wonder, and a shocking or memorable payoff.
 
 Rules:
-1. Scene 1 hook MUST stop the scroll in under 1.5 seconds with intense romantic intrigue or seductive curiosity (e.g. "The 3-second glance that makes someone instantly crave your presence...", "Why quiet confidence in a silk dress commands any room...").
-2. Tone: Bold, extremely seductive, sophisticated, magnetic, and emotionally intense.
-3. STRICT POLICY COMPLIANCE: All characters are adults aged 25+. NO pornography, NO graphic sexual depictions, NO visible nudity, NO non-consensual content. Keep all visuals artistic, lingerie-inspired with full coverage, and 100% compliant with YouTube and Instagram Community Guidelines.
+1. Scene 1 hook MUST stop the scroll in under 1.5 seconds with intense narrative intrigue (e.g. For horror: "If you wake up at 3:07 AM and hear knocking on your closet door, whatever you do, keep your eyes closed...", For kids: "In a forest where the mushrooms glow like blue lanterns, a tiny mouse made an impossible discovery...", For adults: "The deep sea submarine was supposed to map the trench floor. Instead, they found a titanium door sealed from the outside...").
+2. Ensure vocabulary, tone, and character framing match the '{profile['target_audience']}' audience.
+3. STRICT POLICY COMPLIANCE: No graphic sexual content, no hate speech, no real-world tragedy exploitation. Keep horror suspenseful, psychological, and eerie without extreme gore, fully compliant with YouTube Community Guidelines.
 
 Return ONLY JSON:
 {{
-  "topic": "precise topic name",
-  "title": "high-CTR curiosity title under 75 characters with seductive emoji",
-  "angle": "the psychological secret, visual allure, or tension trigger",
-  "style": "allure" | "chemistry" | "mystery" | "charm" | "seduction" | "romance",
+  "topic": "precise story topic name",
+  "title": "high-CTR curiosity title under 75 characters with narrative emoji",
+  "angle": "the central narrative twist, wonder, or psychological mystery",
+  "style": "{profile['style']}",
   "category": "{category}",
-  "virality_score": 9.6
+  "target_audience": "{profile['target_audience']}",
+  "virality_score": 9.7
 }}"""
 
         validator = lambda d: isinstance(d, dict) and bool(d.get("topic")) and bool(d.get("title"))
         data = self.reason_json(prompt, validator, rounds=2)
 
         if not data:
-            # Resilient adult glamour and sensual allure fallback topics
-            fallback_topics = [
-                ("The 3-Second Eye Contact Technique", "The 3-Second Seduction Glaze That Sparks Instant Chemistry 👀🔥", "seduction", "attraction & seduction psychology"),
-                ("The Psychology of Seductive Mystery", "Why Unpredictable Sensual Allure Is Completely Addictive 🖤✨", "mystery", "dark romance & mystery aesthetics"),
-                ("The Art of Romantic Tension", "Subconscious Signals That Make You Irresistibly Magnetic 💋🌹", "allure", "relationship chemistry & presence"),
-                ("Sensual Body Language & Presence", "The Subtle Movements That Command Deep Romantic Desire ⚡", "chemistry", "flirting psychology & charm secrets"),
-                ("Intimate Midnight Rendezvous Psychology", "How Magnetic Presence In Luxury Settings Creates Obsession 🥂", "romance", "dating dynamics & romantic secrets"),
+            # Resilient multi-audience storytelling fallbacks
+            fallback_stories = [
+                # Horror
+                ("The Trench That Knocked Back", "The Deep Sea Expedition That Discovered Something Tapping Back 🌊👁️", "horror", "Horror Stories & Supernatural Thrillers", "horror"),
+                ("The Reflection with a Delay", "Why You Should Never Stare At Antique Mirrors After Midnight 🪞🩸", "horror", "Horror Stories & Supernatural Thrillers", "horror"),
+                # Children Fable
+                ("The Little Star Who Forgot How to Glow", "The Little Star Who Discovered How To Make Her Own Light ✨⭐", "fable", "Children's Whimsical Fables & Bedtime Tales", "children"),
+                ("The Whispering Mushroom Forest", "The Brave Little Fox And The Secret Tree Underground Network 🦊🍄", "fable", "Children's Whimsical Fables & Bedtime Tales", "children"),
+                # Adult Sci-Fi / Thriller
+                ("The Signal from 12 Hours Ahead", "The Radio Telescope That Started Receiving Tomorrow's News 📡⏳", "scifi", "Mind-Bending Sci-Fi & Speculative Tales", "adults"),
+                ("The Architect Who Erased a Floor", "The Blueprint Secret Hidden Inside The 13th Floor 🏢🗝️", "thriller", "Adult Psychological Thrillers & Noir Fiction", "adults"),
+                # Myth & Legend
+                ("The Clockwork Titan of Alexandria", "The Ancient Inventor Who Built A Mechanical Guardian ⚙️🏛️", "legend", "Ancient Myths, Folklore & Epic Legends", "all_ages"),
             ]
-            pick = random.choice(fallback_topics)
+            pick = random.choice(fallback_stories)
             data = {
                 "topic": pick[0],
                 "title": pick[1],
-                "angle": "Exploring the bold psychological and sensual dynamics of intense romantic attraction.",
+                "angle": "An engaging narrative transforming mystery and curiosity into captivating storytelling.",
                 "style": pick[2],
                 "category": pick[3],
+                "target_audience": pick[4],
                 "virality_score": 9.5,
             }
 
         return data
 
     # ---------------------------------------------------------
-    # Capability 2: Scene-by-Scene Script Generation (Glamour & Seduction)
+    # Capability 2: Scene-by-Scene Script Generation (Multi-Audience Storytelling)
     # ---------------------------------------------------------
     def plan_script(self, topic_info: Dict[str, Any], format_type: str = "short") -> Dict[str, Any]:
-        """Generates a complete scene-by-scene script with visual queries and narration."""
+        """Generates a complete scene-by-scene narrative script with visual choreography and audience-suited tone."""
         num_scenes = 4 if format_type == "short" else 6
+        profile = self.get_audience_profile(topic_info.get("category") or topic_info.get("style", ""))
+        target_audience = topic_info.get("target_audience") or profile["target_audience"]
 
-        prompt = f"""You are a professional adult glamour filmmaker, sensual video director, and cinematic AI content creator.
+        prompt = f"""You are a master storyteller, screenwriter, and cinematic video director.
 Topic: {topic_info['topic']}
 Title: {topic_info['title']}
-Style: {topic_info.get('style', 'allure')}
+Target Audience: {target_audience}
+Genre Style: {topic_info.get('style', profile['style'])}
 Format: {format_type}
 
-DIRECTOR'S VISUAL GUIDELINES FOR EACH SCENE:
-- All models are fictional adults aged 25 and above.
-- Extremely glamorous and alluring adult models with sensual expressions and confident body language.
-- Revealing but non-explicit fashion: elegant lingerie-inspired silk robes, satin slips, lace couture with full coverage (NO visible nudity).
-- Sensual dancing and graceful movements.
-- Romantic bedroom and luxury hotel settings, candlelit ambiance, intimate romantic atmosphere with artistic implied intimacy.
-- Beautiful close-up portraits, dramatic chiaroscuro lighting, rich shadows, and realistic skin textures.
-- Professional cinematic camera movements (slow dolly push, shallow f/1.4 depth of field, 35mm film aesthetic).
+DIRECTOR'S NARRATIVE & VISUAL GUIDELINES:
+- Tone: {profile['tone']}
+- Art Style: {profile['art_style']}
+- Directorial Guidelines: {profile['guidelines']}
 
-Write exactly {num_scenes} sequential narration scenes designed for viral audience retention.
-Pacing Rules:
-- Scene 1 MUST be an instant scroll-stopping hook under 12 words triggering intense curiosity about attraction, romance, or chemistry.
-- Each scene must be punchy, rhythmic, seductive, and alluring (15-22 words max per scene).
-- Speak with calm, confident, magnetic, and seductive elegance directly to the viewer.
+Write exactly {num_scenes} sequential narrative scenes crafted for maximum engagement, emotional resonance, and retention:
+- Scene 1: Instant scroll-stopping hook under 12 words establishing the premise, danger, wonder, or mystery.
+- Scenes 2-{num_scenes-1}: Escalating narrative tension, character choices, sensory details, and an unexpected twist or revelation.
+- Scene {num_scenes}: Satisfying climax, chilling cliffhanger (for horror), heartwarming conclusion (for kids), or thought-provoking resolution.
 - Total narration word count: {90 if format_type == 'short' else 140} words.
-- Provide 2-3 specific visual search terms per scene for cinematic glamour stock footage (e.g. "glamorous woman silk dress slow motion", "sensual couple romantic bedroom candlelit", "elegant model luxury hotel suite portrait", "close up eye contact sensual lighting", "sensual dancing silhouette night").
-- Provide 1 'image_prompt' per scene for photorealistic 8k vertical illustration:
-  Specify fictional adult model aged 25+, lingerie-inspired haute couture silk fashion with full coverage, intimate warm candlelit luxury hotel bedroom or penthouse lounge, soft chiaroscuro shadows, realistic skin texture with visible pores, shallow depth of field f/1.4, 35mm photograph, vertical 9:16 portrait. STRICTLY NO visible nudity or graphic depictions.
+- search_terms: 2-3 specific visual search terms per scene suitable for stock footage or AI generation matching the genre.
+- image_prompt: 1 rich vertical 9:16 prompt per scene tailored to the art style:
+  - If children: Whimsical 3D animation, Pixar-style wonder, friendly animal/creature character, magical vibrant colors, 9:16.
+  - If horror: Atmospheric cinematic horror, fog, eerie chiaroscuro shadows, 35mm grain, dark mystery, 9:16.
+  - If adult thriller/scifi: 8K hyper-realistic cinematic neo-noir, dramatic rim lighting, intense character expressions, 9:16.
 
 Return ONLY JSON:
 {{
   "topic": "{topic_info['topic']}",
   "title": "{topic_info['title']}",
-  "description": "Magnetic, seductive description summarizing this attraction insight.",
-  "hashtags": ["#attraction", "#glamour", "#datingtips", "#romance", "#chemistry", "#allure", "#seduction"],
+  "description": "Engaging description summarizing this story.",
+  "hashtags": ["#story", "#{target_audience}", "#{profile['style']}", "#narrative", "#viral"],
+  "target_audience": "{target_audience}",
+  "style": "{topic_info.get('style', profile['style'])}",
+  "voice_profile": {{
+    "voice": "{profile['voice']}",
+    "rate": "{profile['rate']}"
+  }},
   "scenes": [
     {{
       "text": "spoken narration for this scene",
-      "search_terms": ["glamorous woman silk dress slow motion", "romantic candlelit luxury bedroom"],
-      "image_prompt": "cinematic 8k vertical portrait of a stunning 26-year-old fictional woman in an elegant satin silk slip dress in a luxury candlelit hotel suite, intimate warm amber rim lighting, soft shadows, realistic skin pores, 35mm photo, f/1.4, 9:16 composition"
+      "search_terms": ["cinematic visual query 1", "cinematic visual query 2"],
+      "image_prompt": "detailed vertical 9:16 prompt reflecting the {target_audience} art style"
     }}
   ]
 }}"""
@@ -310,35 +389,104 @@ Return ONLY JSON:
         script = self.reason_json(prompt, validator, rounds=2)
 
         if not script:
-            # Resilient alluring fallback script with adult glamour aesthetic
-            script = {
-                "topic": topic_info["topic"],
-                "title": topic_info["title"],
-                "description": f"Exploring {topic_info['topic']} with bold seductive insight and cinematic glamour.",
-                "hashtags": ["#attraction", "#glamour", "#datingtips", "#romance", "#chemistry", "#allure", "#seduction"],
-                "scenes": [
-                    {
-                        "text": "The most intoxicating attraction never announces itself. It lingers in the quiet air between two people.",
-                        "search_terms": ["glamorous woman silk dress slow motion", "luxury hotel suite intimate candlelit"],
-                        "image_prompt": "cinematic 8k vertical portrait of an alluring 27-year-old fictional woman in a black silk robe lounging on a velvet chaise in a luxury penthouse, warm amber candlelight, realistic skin texture, 35mm film grain, 9:16"
-                    },
-                    {
-                        "text": "When you hold someone's gaze for three breathless seconds, their pulse accelerates before their mind can catch up.",
-                        "search_terms": ["close up eye contact sensual lighting", "sensual couple romantic bedroom candlelit"],
-                        "image_prompt": "intimate close up portrait of a captivating 26-year-old fictional woman with intense alluring gaze, subtle sensual smile, soft bedroom lamp glow, detailed skin texture, shallow f/1.4 depth of field, 9:16"
-                    },
-                    {
-                        "text": "True allure isn't about giving everything away. It is the exquisite art of making them crave what you keep secret.",
-                        "search_terms": ["sensual slow dance silhouette", "elegant model luxury hotel suite portrait"],
-                        "image_prompt": "cinematic 8k shot of an elegant fictional adult couple in glamorous evening attire sharing an intimate slow dance on a moonlit Parisian balcony, soft bokeh city lights, 9:16"
-                    },
-                    {
-                        "text": "Master the silent psychology of seduction. Follow now to unlock your most magnetic presence.",
-                        "search_terms": ["glamorous woman bedroom portrait cinematic", "romantic rooftop sunset couple"],
-                        "image_prompt": "striking vertical 9:16 portrait of a glamorous 28-year-old fictional woman in an emerald satin gown raising a champagne flute in a luxury candlelit lounge, elegant confident expression, 8k cinematic lighting"
-                    },
-                ],
-            }
+            # Resilient fallback scripts based on audience
+            if target_audience == "horror":
+                script = {
+                    "topic": topic_info["topic"],
+                    "title": topic_info["title"],
+                    "description": "A spine-chilling supernatural tale of an ocean mystery that answered back.",
+                    "hashtags": ["#horror", "#scarystories", "#creepypasta", "#mystery", "#supernatural"],
+                    "target_audience": "horror",
+                    "style": "horror",
+                    "voice_profile": {"voice": "en-US-GuyNeural", "rate": "-10%"},
+                    "scenes": [
+                        {
+                            "text": "At seven miles beneath the ocean surface, the research submarine heard three rhythmic metallic taps on the outer hull.",
+                            "search_terms": ["deep sea submarine darkness", "ocean trench dark water"],
+                            "image_prompt": "cinematic atmospheric horror, research submarine floodlights illuminating deep pitch-black ocean trench, ominous shadows, eerie underwater particles, 35mm film grain, 9:16"
+                        },
+                        {
+                            "text": "The sonar technician tapped back twice as a nervous joke. Four seconds later... five loud thuds answered.",
+                            "search_terms": ["sonar screen dark control room", "tense submarine interior"],
+                            "image_prompt": "tense dark submarine control room, green glow of flickering sonar display, sweating nervous technician looking into dark porthole, 9:16 vertical"
+                        },
+                        {
+                            "text": "When they turned on the high-intensity floodlights, nothing was outside. Only fresh scratch marks in the solid titanium.",
+                            "search_terms": ["scratched metal submarine hull", "dark deep sea void"],
+                            "image_prompt": "macro close-up of submarine exterior hull illuminated by harsh beam of light, massive claw scratch marks on titanium, endless abyss behind it, 9:16"
+                        },
+                        {
+                            "text": "Some depths were never meant to be explored. Subscribe... if you dare to listen closer.",
+                            "search_terms": ["creepy dark ocean abyss", "shadowy underwater silhouette"],
+                            "image_prompt": "terrifying underwater silhouette of an colossal ancient shape fading into the deep blue fog, cinematic horror lighting, 9:16"
+                        },
+                    ],
+                }
+            elif target_audience == "children":
+                script = {
+                    "topic": topic_info["topic"],
+                    "title": topic_info["title"],
+                    "description": "An enchanting storybook adventure about a brave little star discovering her own light.",
+                    "hashtags": ["#kidsstory", "#fable", "#bedtimestory", "#whimsical", "#animation"],
+                    "target_audience": "children",
+                    "style": "fable",
+                    "voice_profile": {"voice": "en-US-AnaNeural", "rate": "+0%"},
+                    "scenes": [
+                        {
+                            "text": "High above the sleepy clouds, a tiny baby star named Pip was the only one who hadn't learned how to sparkle.",
+                            "search_terms": ["cute animated star night sky", "whimsical cartoon clouds"],
+                            "image_prompt": "whimsical 3D animated scene, adorable little golden star with big curious eyes sitting on a fluffy pastel cloud in a dreamy night sky, Pixar style, 9:16"
+                        },
+                        {
+                            "text": "An old wise moon whispered: You don't get light from the outside, little Pip. Light happens when you share your warmth.",
+                            "search_terms": ["smiling cartoon moon night sky", "magic glowing fairy dust"],
+                            "image_prompt": "gentle smiling crescent moon wearing a cozy nightcap talking warmly to the tiny cute star, glowing stardust particles, soft magical lighting, 9:16"
+                        },
+                        {
+                            "text": "So Pip gave a warm hug to a lonely little comet flying past. Instantly, her whole heart ignited into brilliant golden starlight!",
+                            "search_terms": ["cute cartoon comet flying", "bright glowing golden star"],
+                            "image_prompt": "tiny cute star hugging a friendly smiling baby comet with a glowing rainbow tail, burst of sparkling golden light, heartwarming magical atmosphere, 9:16"
+                        },
+                        {
+                            "text": "And from that night on, Pip shone brightest of all. Sweet dreams, little explorer, and follow for more bedtime magic.",
+                            "search_terms": ["beautiful starry sky cartoon", "magical glowing night sky"],
+                            "image_prompt": "delightful wide shot of the night sky filled with smiling stars and gentle glowing constellations over a peaceful sleeping village, 9:16"
+                        },
+                    ],
+                }
+            else:
+                # Adult Sci-Fi / Psychological Thriller
+                script = {
+                    "topic": topic_info["topic"],
+                    "title": topic_info["title"],
+                    "description": "A gripping sci-fi thriller about a temporal signal received by an isolated observatory.",
+                    "hashtags": ["#scifi", "#thriller", "#psychological", "#mystery", "#storytelling"],
+                    "target_audience": "adults",
+                    "style": "scifi",
+                    "voice_profile": {"voice": "en-US-ChristopherNeural", "rate": "+2%"},
+                    "scenes": [
+                        {
+                            "text": "At 2:14 AM, the Atacama radio telescope picked up an encrypted military broadcast on an abandoned satellite frequency.",
+                            "search_terms": ["radio telescope dish night sky", "modern astronomy observatory"],
+                            "image_prompt": "cinematic neo-noir 8k wide shot of massive radio telescope dishes pointing toward Milky Way at night, dramatic blue hour lighting, 9:16"
+                        },
+                        {
+                            "text": "The decoded audio was Dr. Vance's own voice reading a disaster evacuation protocol that had not been written yet.",
+                            "search_terms": ["tense scientist audio waveform", "cinematic dark control room"],
+                            "image_prompt": "intense close-up of a 35-year-old astrophysicist staring in disbelief at an audio spectral waveform on monitors, dramatic rim lighting, 9:16"
+                        },
+                        {
+                            "text": "The time-stamp was twelve hours in the future. And outside the sealed laboratory doors, the power grid just went dark.",
+                            "search_terms": ["emergency red lights hallway", "dark laboratory silhouettes"],
+                            "image_prompt": "moody dark laboratory hallway illuminated by glowing emergency red backup lights, long shadows, cinematic suspense, 9:16"
+                        },
+                        {
+                            "text": "When the future speaks, you have to decide whether to listen or run. Follow for the next chapter.",
+                            "search_terms": ["silhouette person looking starry night", "cinematic mystery night"],
+                            "image_prompt": "silhouette of the scientist opening heavy vault doors looking out onto a dark mountain ridge under an ominous starry sky, 9:16"
+                        },
+                    ],
+                }
 
         return script
 

@@ -150,26 +150,31 @@ def analyze(sig: dict, llm_json, categories: list[str]) -> dict | None:
         history = json.loads(Path("history.json").read_text(encoding="utf-8"))[-60:]
     except Exception:
         pass
-    prompt = f"""You are the lead Trend Analyst and Creative Strategist for a high-retention Adult Glamour, Seduction Psychology, and Romantic Allure YouTube Shorts and Instagram Reels channel.
+    prompt = f"""You are the lead Creative Story Strategist and Trend Analyst for a multi-audience storytelling and fictional entertainment channel.
 Niches: {', '.join(categories)}. Today is {_today()}.
 
 SIGNALS (what people search for and watch right now):
 {_signals_text(sig)}
 
-Turn trending cultural conversations, relationship queries, and psychological hooks into bold, seductive, high-engagement video concepts. Return ONLY JSON:
-{{"ideas": [{{"topic": "specific attraction or romantic glamour topic", "angle": "the psychological secret, visual allure, or tension trigger",
+Transform real-world scientific phenomena, mysteries, cultural queries, and trending topics into compelling storytelling and fictional concepts for distinct audiences:
+1. Children (whimsical fables, magical adventures, wonder of science as magic, positive lessons)
+2. Horror (supernatural creepypastas, eerie urban legends, psychological dread, dark twists)
+3. Adults (high-stakes psychological thrillers, dark sci-fi speculative fiction, thought-provoking mysteries)
+4. Legends (epic folklore, ancient myths, heroic sagas)
+
+Return ONLY JSON:
+{{"ideas": [{{"topic": "creative story topic", "angle": "the narrative twist, wonder, or psychological mystery",
   "why_trending": "which signal(s) inspired it", "format": "short|long|story",
-  "style": "allure|chemistry|mystery|charm|seduction|romance", "score": 1-10}}],
- "format_trends": ["video formats, hooks, or visual styles that visibly generate viral retention"],
- "title_patterns": ["high-CTR curiosity title patterns seen in top romantic/lifestyle shorts"]}}
+  "style": "horror|fable|thriller|scifi|legend|mystery", "target_audience": "children|adults|horror|all_ages", "score": 1-10}}],
+ "format_trends": ["storytelling formats, narrative hooks, or visual styles that visibly generate viral retention"],
+ "title_patterns": ["high-CTR curiosity title patterns seen in top storytelling and horror shorts"]}}
 
 Rules:
-- 12 ideas: 6 "short" (fast-paced viral Shorts), 3 "long" (deep-dive masterclass), 3 "story" (cinematic sensual narrative featuring adult fictional characters 25+).
-- Convert trends into high-retention concepts exploring romantic psychology, subconscious chemistry triggers, non-verbal seduction, bedroom/luxury hotel aesthetics, and magnetic confidence.
-- Visual style focus: Fictional adult characters aged 25+, glamorous lingerie-inspired fashion with full coverage, intimate warm lighting, luxury hotel suites, romantic bedrooms, and cinematic close-ups.
-- NEVER include: real living people by name, celebrity gossip, politics, tragedy, explicit pornography, visible nudity, non-consensual content, or medical advice.
+- 12 ideas distributed across audiences: 6 "short" (fast-paced viral story Shorts), 3 "long" (deep-dive fictional saga), 3 "story" (illustrated visual story).
+- Ensure creative transformation of real facts/science into captivating fiction.
+- NEVER include: real living people by name, celebrity gossip, politics, tragedy exploitation, extreme graphic violence, or sexually explicit content.
 - Do not repeat or closely resemble these earlier topics: {'; '.join(history) or 'none'}.
-- score = expected viral retention x romantic intrigue x aesthetic fit for the glamour niche."""
+- score = narrative intrigue x emotional resonance x audience engagement."""
     valid = lambda d: (isinstance(d, dict) and isinstance(d.get("ideas"), list)
                        and sum(isinstance(i, dict) and isinstance(i.get("topic"), str) for i in d["ideas"]) >= 3)
     return llm_json(prompt, rounds=2, valid=valid)

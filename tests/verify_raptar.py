@@ -284,9 +284,14 @@ def test_raptar_agent_engine():
     assert isinstance(state, dict), "Agent state should be a dict"
     
     # 2. Test topic formulation & weighted choice
-    topic_info = agent.evaluate_and_pick_topic({}, ["attraction & seduction psychology", "dating dynamics & romantic secrets"], format_type="short")
+    topic_info = agent.evaluate_and_pick_topic(
+        {},
+        ["Horror & Supernatural Thrillers", "Children's Whimsical Fables & Adventures", "Adult Psychological Thrillers & Sci-Fi"],
+        format_type="short"
+    )
     valid_styles = [
-        "allure", "chemistry", "mystery", "charm", "seduction", "romance",
+        "horror", "fable", "thriller", "scifi", "legend", "mystery",
+        "allure", "chemistry", "charm", "seduction", "romance",
         "glamour", "aesthetic", "mindset", "spectacle", "story", "fact", "myth", "how", "top3", "whatif"
     ]
     assert topic_info["style"] in valid_styles, f"Invalid style assigned: {topic_info.get('style')}"

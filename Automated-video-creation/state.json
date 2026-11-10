@@ -15,126 +15,138 @@
     "2026-11-06T15:35:53+00:00"
   ],
   "trends": {
-    "date": "2026-11-09",
+    "date": "2026-11-10",
     "ideas": [
       {
-        "topic": "The 3-Second Eye Contact Technique",
-        "angle": "How lingering 3-second eye contact triggers instant dopamine and romantic tension in luxury candlelit settings",
-        "why_trending": "viral attraction psychology trends",
+        "topic": "The Trench That Knocked Back",
+        "angle": "A deep sea research crew taps on the hull seven miles down, and something massive taps back from the abyss",
+        "why_trending": "ocean horror and deep sea creepypasta trends",
         "format": "short",
-        "style": "seduction",
+        "style": "horror",
+        "target_audience": "horror",
         "score": 10,
         "used": false
       },
       {
-        "topic": "The Subtle Art of Sensual Mystery",
-        "angle": "Why maintaining an emotional veil and slow, graceful movements makes someone crave your attention",
-        "why_trending": "dark romance and mystery aesthetics momentum",
+        "topic": "The Little Star Who Forgot How to Glow",
+        "angle": "An enchanting tale of a tiny baby star learning that sharing warmth is what creates true starlight",
+        "why_trending": "kids bedtime fables and animated shorts success",
         "format": "short",
-        "style": "mystery",
-        "score": 9,
-        "used": false
-      },
-      {
-        "topic": "The Whispering Proximity Dynamic",
-        "angle": "How subtle shifts in vocal resonance and intimate physical proximity spark undeniable chemistry",
-        "why_trending": "dating dynamics and charm search spike",
-        "format": "short",
-        "style": "charm",
-        "score": 9,
-        "used": false
-      },
-      {
-        "topic": "The Triangles Gazing Law",
-        "angle": "The seductive visual pattern between eyes and lips that signals undeniable romantic chemistry",
-        "why_trending": "body language seduction signals viral video",
-        "format": "short",
-        "style": "allure",
+        "style": "fable",
+        "target_audience": "children",
         "score": 10,
         "used": false
       },
       {
-        "topic": "Sensual Body Language & Presence",
-        "angle": "Slow, deliberate, graceful movements that command romantic desire in luxury hotel suites",
-        "why_trending": "high-status aesthetic and presence trends",
+        "topic": "The Signal from 12 Hours Ahead",
+        "angle": "An isolated radio telescope picks up an evacuation broadcast in the astronomer's own voice dated tomorrow morning",
+        "why_trending": "sci-fi thriller and time paradox fiction spike",
         "format": "short",
-        "style": "chemistry",
-        "score": 9,
-        "used": false
-      },
-      {
-        "topic": "Midnight Luxury Suite Rendezvous",
-        "angle": "The psychological allure of candlelit boutique hotel bedrooms and intimate evening atmosphere",
-        "why_trending": "luxury date night and romantic ambiance trends",
-        "format": "short",
-        "style": "romance",
-        "score": 9,
-        "used": false
-      },
-      {
-        "topic": "The Masterclass on Romantic Attraction",
-        "angle": "Deep-dive psychology into why certain individuals possess an irresistible, hypnotic romantic aura",
-        "why_trending": "long-form relationship psychology deep dives",
-        "format": "long",
-        "style": "allure",
-        "score": 9,
-        "used": false
-      },
-      {
-        "topic": "Psychology of Seductive Body Language",
-        "angle": "Analyzing micro-expressions, posture, and touch dynamics of magnetic adult models in evening wear",
-        "why_trending": "dating psychology masterclass",
-        "format": "long",
-        "style": "chemistry",
-        "score": 9,
-        "used": false
-      },
-      {
-        "topic": "The Power of Quiet Confidence in Evening Couture",
-        "angle": "Why high-fashion elegance and unhurried composure create unshakeable romantic fascination",
-        "why_trending": "haute couture and glamour lifestyle searches",
-        "format": "long",
-        "style": "mystery",
-        "score": 9,
-        "used": false
-      },
-      {
-        "topic": "Midnight in Paris: The Velvet Suite",
-        "angle": "A cinematic visual story of an alluring fictional couple in a luxury candlelit hotel sharing an unspoken connection",
-        "why_trending": "romantic visual storytelling shorts success",
-        "format": "story",
-        "style": "story",
+        "style": "scifi",
+        "target_audience": "adults",
         "score": 10,
         "used": false
       },
       {
-        "topic": "The Scent of Midnight Silk",
-        "angle": "An alluring tale of a captivating woman in a silk slip dress commanding a moonlit rooftop lounge",
-        "why_trending": "cinematic aesthetic romance stories",
-        "format": "story",
-        "style": "story",
+        "topic": "The Reflection With A Delay",
+        "angle": "A college student notices that an antique mirror in an inherited Victorian house blinks half a second late",
+        "why_trending": "supernatural urban legend and ghost story trends",
+        "format": "short",
+        "style": "horror",
+        "target_audience": "horror",
         "score": 9,
         "used": false
       },
       {
-        "topic": "A Dance at Twilight",
-        "angle": "The hypnotic rhythm of an intimate slow dance in a luxury penthouse overlooking glowing city lights",
-        "why_trending": "sensual dancing and romantic reel trends",
+        "topic": "The Whispering Mushroom Forest",
+        "angle": "A curious fox cub discovers that the glowing underground mushroom roots are carrying secret messages for the trees",
+        "why_trending": "nature science transformed into children fantasy stories",
+        "format": "short",
+        "style": "fable",
+        "target_audience": "children",
+        "score": 9,
+        "used": false
+      },
+      {
+        "topic": "The Architect Who Erased a Floor",
+        "angle": "An urban explorer finds an elevator button that only appears when the clock strikes 3:33 AM",
+        "why_trending": "psychological mystery and architectural thriller reels",
+        "format": "short",
+        "style": "thriller",
+        "target_audience": "adults",
+        "score": 9,
+        "used": false
+      },
+      {
+        "topic": "The Clockwork Titan of Alexandria",
+        "angle": "The legendary tale of an ancient Hellenistic mathematician who built a brass sentinel that outlived an empire",
+        "why_trending": "ancient history and mythological epics momentum",
+        "format": "long",
+        "style": "legend",
+        "target_audience": "all_ages",
+        "score": 9,
+        "used": false
+      },
+      {
+        "topic": "The Black Hole at the End of the Hall",
+        "angle": "A quantum physics laboratory anomaly turns an apartment hallway into an event horizon where lost things whisper",
+        "why_trending": "cosmic horror and speculative sci-fi storytelling",
+        "format": "long",
+        "style": "scifi",
+        "target_audience": "adults",
+        "score": 9,
+        "used": false
+      },
+      {
+        "topic": "The Village That Froze in Autumn",
+        "angle": "A dark folklore legend about a mountain town where leaves never fell and the clocktower bells began ringing backwards",
+        "why_trending": "dark folklore and eerie atmospheric tales",
+        "format": "long",
+        "style": "horror",
+        "target_audience": "horror",
+        "score": 9,
+        "used": false
+      },
+      {
+        "topic": "The Brave Little Cloud Who Wanted to Paint",
+        "angle": "A young cumulus cloud learns how raindrops refract sunlight to paint the world's very first rainbow",
+        "why_trending": "children educational storybook illustrated reels",
         "format": "story",
-        "style": "story",
+        "style": "fable",
+        "target_audience": "children",
+        "score": 10,
+        "used": false
+      },
+      {
+        "topic": "The Cabin with Two Front Doors",
+        "angle": "A hunter lost in a blizzard finds a warm cabin where opening the left door shows summer, and the right door shows nothingness",
+        "why_trending": "illustrated suspense and eerie mystery story shorts",
+        "format": "story",
+        "style": "horror",
+        "target_audience": "horror",
+        "score": 9,
+        "used": false
+      },
+      {
+        "topic": "The Mapmaker Who Drew Tomorrow",
+        "angle": "An imperial cartographer draws coastlines that don't exist yet, only for islands to rise from the sea months later",
+        "why_trending": "fantasy storytelling and fictional narrative shorts",
+        "format": "story",
+        "style": "legend",
+        "target_audience": "all_ages",
         "score": 9,
         "used": false
       }
     ],
     "format_trends": [
-      "1.5-second scroll-stopping sensual hook with candlelit luxury suite aesthetic",
-      "Chiaroscuro rim lighting on silk lingerie-inspired evening gowns with full coverage",
-      "Intimate close-up portraits with intense magnetic gaze and shallow f/1.4 depth of field"
+      "1.5-second scroll-stopping narrative hook with immediate story stakes",
+      "Dramatic sound-design cues and pacing shifts right before the narrative twist",
+      "Kinetic subtitles with dynamic color accents matching the story genre (crimson for horror, sunshine yellow for kids)"
     ],
     "title_patterns": [
-      "The [Number]-Second Trick That Creates Instant Seductive Tension 👀💋",
-      "Why [Trait] In A Silk Dress Is Completely Addictive 🖤✨",
-      "Signs Of Intense Romantic Chemistry You Can't Fake 🔥🌹"
+      "The Story Of The [Character/Place] That [Shocking Action] 👁️📖",
+      "If You Ever See [Strange Occurrence], Whatever You Do, Don't [Action] 🩸⚠️",
+      "The [Adjective] Tale Of [Character] And The [Object] ✨🦊"
     ]
   },
   "videos": [
@@ -162,22 +174,24 @@
   ],
   "weights": {
     "category": {
-      "attraction & seduction psychology": 1.95,
-      "dating dynamics & romantic secrets": 1.9,
-      "magnetic allure & sensual aesthetics": 1.85,
-      "flirting psychology & charm secrets": 1.8,
-      "relationship chemistry & presence": 1.7,
-      "dark romance & mystery aesthetics": 1.6,
+      "Horror & Supernatural Thrillers": 1.95,
+      "Children's Whimsical Fables & Adventures": 1.9,
+      "Adult Psychological Thrillers & Sci-Fi": 1.9,
+      "Ancient Myths, Legends & Epic Lore": 1.85,
+      "Dark Folklore & Urban Legends": 1.8,
+      "Scientific Mysteries Transformed into Stories": 1.85,
+      "Entertaining Fictional Mysteries": 1.8,
       "space and astronomy": 1.85
     },
     "style": {
-      "allure": 1.95,
-      "chemistry": 1.9,
-      "mystery": 1.85,
-      "charm": 1.8,
-      "seduction": 1.75,
-      "romance": 1.7,
-      "story": 1.06
+      "horror": 1.95,
+      "fable": 1.9,
+      "thriller": 1.9,
+      "scifi": 1.85,
+      "legend": 1.8,
+      "mystery": 1.75,
+      "story": 1.8,
+      "allure": 1.2
     }
   }
 }

@@ -98,6 +98,7 @@ DEFAULT_CATEGORIES = [
     "Dark Folklore & Urban Legends",
     "Scientific Mysteries Transformed into Stories",
     "Entertaining Fictional Mysteries",
+    "Photorealistic AI Influencer & Fitness Routines",
 ]
 CATEGORIES = [c.strip() for c in os.environ.get("CATEGORIES", "").split(",") if c.strip()] or DEFAULT_CATEGORIES
 
@@ -109,6 +110,7 @@ STYLES = {
     "scifi": "Mind-bending sci-fi fiction: speculative science anomalies, time loops, and cosmic mysteries.",
     "legend": "Epic mythology & folklore: ancient lore, forgotten civilizations, and legendary heroic sagas.",
     "mystery": "Unraveling enigmatic fiction: sudden revelations, hidden clues, and clever narrative twists.",
+    "fitness_glamour": "Photorealistic AI influencer fitness & lifestyle: aesthetic activewear workout routines, morning discipline, and radiant glow.",
     "allure": "Magnetic allure & psychological intrigue.",
     "chemistry": "Emotional dynamics & chemistry.",
     "charm": "Clever wit and charisma.",

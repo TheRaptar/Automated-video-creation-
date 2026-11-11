@@ -291,6 +291,7 @@ def test_raptar_agent_engine():
     )
     valid_styles = [
         "horror", "fable", "thriller", "scifi", "legend", "mystery",
+        "fitness_glamour",
         "allure", "chemistry", "charm", "seduction", "romance",
         "glamour", "aesthetic", "mindset", "spectacle", "story", "fact", "myth", "how", "top3", "whatif"
     ]

@@ -217,6 +217,18 @@ class RaptarAgent:
                 "art_style": "epic fantasy matte painting, golden atmospheric glow, ancient ruins, mythic scale, cinematic 8k lighting, 9:16 vertical",
                 "guidelines": "Grand, legendary storytelling with ancient secrets, forgotten myths, mythic beasts, and theatrical presence."
             }
+        elif any(k in lower for k in ("fitness", "influencer", "workout", "routine", "gym", "leila", "activewear", "aesthetic")):
+            return {
+                "target_audience": "fitness_lifestyle",
+                "style": "fitness_glamour",
+                "voice": "en-US-AvaNeural",
+                "rate": "+4%",
+                "tone": "upbeat, motivating, confident, aesthetic fitness influencer daily routine",
+                "subtitle_color": "0x00FF88",  # Neon emerald / mint
+                "subtitle_shadow": "0x000000",
+                "art_style": "photorealistic 8K portrait photography, stunning athletic female AI influencer in stylish activewear workout outfit, morning gym daylight, natural skin texture with visible pores, 35mm f/1.4 lens, 9:16 vertical",
+                "guidelines": "Engaging first-person fitness influencer lifestyle routine ('A morning in my life', workout habits, tone & discipline motivation). Confident, aesthetic, and inspiring."
+            }
         else:
             # Adult Fiction / Sci-Fi / Psychological Thriller
             return {
@@ -252,6 +264,7 @@ class RaptarAgent:
             "Mind-Bending Sci-Fi & Speculative Tales",
             "Ancient Myths, Folklore & Epic Legends",
             "Entertaining Fictional Mysteries & Twists",
+            "Photorealistic AI Influencer & Fitness Routines",
         ]
         active_categories = categories or story_default_niches
 
@@ -278,6 +291,7 @@ Audience Guidelines:
 - If Target Audience is 'children': Write whimsical fables, magical adventures, or wonder-filled tales explaining how things work through lovable characters, playful magic, and heartwarming morals.
 - If Target Audience is 'horror': Write spine-chilling supernatural creepypastas, eerie urban legends, psychological dread, haunted encounters, and terrifying plot twists based on eerie anomalies or strange real phenomena.
 - If Target Audience is 'adults': Write sophisticated psychological thrillers, dark sci-fi speculative fiction, thought-provoking moral dilemmas, or noir mysteries where science/logic unravels.
+- If Target Audience is 'fitness_lifestyle': Write engaging first-person routine vlogs featuring consistent AI fitness influencer Leila (6 AM morning workout routines, activewear style, dynamic stretches, resistance training, positive discipline and glow).
 - If Target Audience is 'all_ages' (legend): Write epic mythological folklore, legendary battles of wit, and ancient historical sagas.
 
 Avoid repeating or closely resembling any of these recent topics:
@@ -286,9 +300,9 @@ Avoid repeating or closely resembling any of these recent topics:
 Formulate ONE original, irresistible, creative story concept with a gripping narrative hook, rising suspense/wonder, and a shocking or memorable payoff.
 
 Rules:
-1. Scene 1 hook MUST stop the scroll in under 1.5 seconds with intense narrative intrigue (e.g. For horror: "If you wake up at 3:07 AM and hear knocking on your closet door, whatever you do, keep your eyes closed...", For kids: "In a forest where the mushrooms glow like blue lanterns, a tiny mouse made an impossible discovery...", For adults: "The deep sea submarine was supposed to map the trench floor. Instead, they found a titanium door sealed from the outside...").
+1. Scene 1 hook MUST stop the scroll in under 1.5 seconds with intense narrative intrigue (e.g. For horror: "If you wake up at 3:07 AM and hear knocking on your closet door, whatever you do, keep your eyes closed...", For kids: "In a forest where the mushrooms glow like blue lanterns, a tiny mouse made an impossible discovery...", For fitness: "Six AM alarm. Most people hit snooze, but Leila is already lacing up...").
 2. Ensure vocabulary, tone, and character framing match the '{profile['target_audience']}' audience.
-3. STRICT POLICY COMPLIANCE: No graphic sexual content, no hate speech, no real-world tragedy exploitation. Keep horror suspenseful, psychological, and eerie without extreme gore, fully compliant with YouTube Community Guidelines.
+3. STRICT POLICY COMPLIANCE: No graphic sexual content, no hate speech, no real-world tragedy exploitation. Full coverage stylish activewear for fitness; keep horror psychological and eerie without extreme gore, fully compliant with YouTube Community Guidelines.
 
 Return ONLY JSON:
 {{
@@ -307,6 +321,8 @@ Return ONLY JSON:
         if not data:
             # Resilient multi-audience storytelling fallbacks
             fallback_stories = [
+                # Fitness & Lifestyle Routine (Leila Style)
+                ("Morning Workout Routine with Leila", "Start Your Morning Right: 6 AM Gym Routine with Leila 🏃‍♀️⚡", "fitness_glamour", "Photorealistic AI Influencer & Fitness Routines", "fitness_lifestyle"),
                 # Horror
                 ("The Trench That Knocked Back", "The Deep Sea Expedition That Discovered Something Tapping Back 🌊👁️", "horror", "Horror Stories & Supernatural Thrillers", "horror"),
                 ("The Reflection with a Delay", "Why You Should Never Stare At Antique Mirrors After Midnight 🪞🩸", "horror", "Horror Stories & Supernatural Thrillers", "horror"),
@@ -451,6 +467,38 @@ Return ONLY JSON:
                             "text": "And from that night on, Pip shone brightest of all. Sweet dreams, little explorer, and follow for more bedtime magic.",
                             "search_terms": ["beautiful starry sky cartoon", "magical glowing night sky"],
                             "image_prompt": "delightful wide shot of the night sky filled with smiling stars and gentle glowing constellations over a peaceful sleeping village, 9:16"
+                        },
+                    ],
+                }
+            elif target_audience == "fitness_lifestyle":
+                script = {
+                    "topic": topic_info["topic"],
+                    "title": topic_info["title"],
+                    "description": "Start your morning right with Leila: a 6 AM aesthetic fitness and workout discipline routine.",
+                    "hashtags": ["#fitness", "#morningroutine", "#gymmotivation", "#workout", "#aesthetic"],
+                    "target_audience": "fitness_lifestyle",
+                    "style": "fitness_glamour",
+                    "voice_profile": {"voice": "en-US-AvaNeural", "rate": "+4%"},
+                    "scenes": [
+                        {
+                            "text": "Six a.m. Alarm rings, activewear on. The secret isn't motivation—it's showing up when you'd rather sleep in.",
+                            "search_terms": ["female athlete tying running shoes morning", "fitness routine aesthetic gym"],
+                            "image_prompt": "photorealistic 8k portrait photography, stunning athletic female AI influencer named Leila in stylish activewear workout outfit, tying sneakers in sunlit modern apartment, morning golden hour light, 35mm f/1.4 lens, 9:16 vertical"
+                        },
+                        {
+                            "text": "First, twenty minutes of dynamic stretching and core activation. Feel that blood flowing and focus sharpening.",
+                            "search_terms": ["female fitness stretching warm up", "aesthetic modern gym daylight"],
+                            "image_prompt": "photorealistic 8k shot of Leila performing aesthetic yoga stretches on a mat in a bright luxury boutique gym, natural skin texture with subtle glow, confident radiant smile, 9:16 vertical"
+                        },
+                        {
+                            "text": "Then heavy resistance sets. Every rep builds mental resilience and sculpted strength. Don't wish for it, work for it.",
+                            "search_terms": ["female weight training dumbbell workout", "athletic woman training aesthetic"],
+                            "image_prompt": "cinematic 8k medium shot of Leila lifting sleek dumbbells, perfect athletic posture, focused determined expression, soft cinematic rim lighting highlighting sculpted shoulders, 9:16 vertical"
+                        },
+                        {
+                            "text": "Post-workout hydration and nutrient glow. Your daily reminder: discipline is self-love. Hit follow for tomorrow's routine!",
+                            "search_terms": ["healthy smoothie post workout gym", "happy athletic woman smiling camera"],
+                            "image_prompt": "gorgeous close-up portrait of Leila holding a fresh green smoothie, smiling warmly at camera, natural daylight, fresh healthy glow, stylish gym jacket, 9:16 vertical"
                         },
                     ],
                 }

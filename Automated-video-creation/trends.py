@@ -161,11 +161,12 @@ Transform real-world scientific phenomena, mysteries, cultural queries, and tren
 2. Horror (supernatural creepypastas, eerie urban legends, psychological dread, dark twists)
 3. Adults (high-stakes psychological thrillers, dark sci-fi speculative fiction, thought-provoking mysteries)
 4. Legends (epic folklore, ancient myths, heroic sagas)
+5. AI Influencer & Fitness Lifestyle (photorealistic AI influencer Leila daily morning gym routine, activewear aesthetics, workout motivation)
 
 Return ONLY JSON:
 {{"ideas": [{{"topic": "creative story topic", "angle": "the narrative twist, wonder, or psychological mystery",
   "why_trending": "which signal(s) inspired it", "format": "short|long|story",
-  "style": "horror|fable|thriller|scifi|legend|mystery", "target_audience": "children|adults|horror|all_ages", "score": 1-10}}],
+  "style": "horror|fable|thriller|scifi|legend|mystery|fitness_glamour", "target_audience": "children|adults|horror|all_ages|fitness_lifestyle", "score": 1-10}}],
  "format_trends": ["storytelling formats, narrative hooks, or visual styles that visibly generate viral retention"],
  "title_patterns": ["high-CTR curiosity title patterns seen in top storytelling and horror shorts"]}}
 

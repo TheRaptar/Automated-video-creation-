@@ -18,6 +18,16 @@
     "date": "2026-11-10",
     "ideas": [
       {
+        "topic": "Morning Workout Routine with Leila",
+        "angle": "Follow aesthetic AI fitness influencer Leila through her 6 AM morning discipline routine, workout sets, and radiant lifestyle",
+        "why_trending": "aesthetic fitness influencer routines and athletic motivation reels",
+        "format": "short",
+        "style": "fitness_glamour",
+        "target_audience": "fitness_lifestyle",
+        "score": 10,
+        "used": false
+      },
+      {
         "topic": "The Trench That Knocked Back",
         "angle": "A deep sea research crew taps on the hull seven miles down, and something massive taps back from the abyss",
         "why_trending": "ocean horror and deep sea creepypasta trends",
@@ -181,9 +191,11 @@
       "Dark Folklore & Urban Legends": 1.8,
       "Scientific Mysteries Transformed into Stories": 1.85,
       "Entertaining Fictional Mysteries": 1.8,
+      "Photorealistic AI Influencer & Fitness Routines": 1.95,
       "space and astronomy": 1.85
     },
     "style": {
+      "fitness_glamour": 1.95,
       "horror": 1.95,
       "fable": 1.9,
       "thriller": 1.9,

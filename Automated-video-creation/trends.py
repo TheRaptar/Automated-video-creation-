@@ -156,22 +156,25 @@ Niches: {', '.join(categories)}. Today is {_today()}.
 SIGNALS (what people search for and watch right now):
 {_signals_text(sig)}
 
-Transform real-world scientific phenomena, mysteries, cultural queries, and trending topics into compelling storytelling and fictional concepts for distinct audiences:
-1. Children (whimsical fables, magical adventures, wonder of science as magic, positive lessons)
-2. Horror (supernatural creepypastas, eerie urban legends, psychological dread, dark twists)
-3. Adults (high-stakes psychological thrillers, dark sci-fi speculative fiction, thought-provoking mysteries)
-4. Legends (epic folklore, ancient myths, heroic sagas)
-5. AI Influencer & Fitness Lifestyle (photorealistic AI influencer Leila daily morning gym routine, activewear aesthetics, workout motivation)
+Transform real-world scientific phenomena, mysteries, cultural queries, and trending topics into compelling animated & storytelling concepts for distinct audiences:
+1. 3D Animated Mythological & Cultural Epics (style: animated_myth — Ramayana/folklore moral fables, divine wisdom, inspiring parables)
+2. 3D Cartoon Character Comedies & Adventures (style: animated_comedy — vibrant animal/hero friendships, regional humor, wholesome surprises)
+3. Anime Fantasy & Folklore Shorts (style: animated_anime — atmospheric 2D anime skyscapes and emotional twists)
+4. Children (style: fable — whimsical fables, magical adventures, positive lessons)
+5. Horror (style: horror — supernatural creepypastas, eerie urban legends, psychological dread)
+6. Adults (style: thriller|scifi — psychological thrillers, dark sci-fi speculative fiction)
+7. AI Influencer & Fitness Lifestyle (style: fitness_glamour — photorealistic AI influencer Leila daily morning gym routine)
 
 Return ONLY JSON:
-{{"ideas": [{{"topic": "creative story topic", "angle": "the narrative twist, wonder, or psychological mystery",
-  "why_trending": "which signal(s) inspired it", "format": "short|long|story",
-  "style": "horror|fable|thriller|scifi|legend|mystery|fitness_glamour", "target_audience": "children|adults|horror|all_ages|fitness_lifestyle", "score": 1-10}}],
- "format_trends": ["storytelling formats, narrative hooks, or visual styles that visibly generate viral retention"],
- "title_patterns": ["high-CTR curiosity title patterns seen in top storytelling and horror shorts"]}}
+{{"ideas": [{{"topic": "creative story topic", "angle": "the narrative twist, wonder, or comedy beat",
+  "why_trending": "which signal(s) inspired it", "format": "short|long|story|animated",
+  "style": "animated_myth|animated_comedy|animated_anime|horror|fable|thriller|scifi|legend|mystery|fitness_glamour",
+  "target_audience": "children|adults|horror|all_ages|fitness_lifestyle", "score": 1-10}}],
+ "format_trends": ["animated hooks, pacing, or visual styles that generate viral retention"],
+ "title_patterns": ["high-CTR curiosity title patterns seen in top animated and storytelling reels"]}}
 
 Rules:
-- 12 ideas distributed across audiences: 6 "short" (fast-paced viral story Shorts), 3 "long" (deep-dive fictional saga), 3 "story" (illustrated visual story).
+- 12 ideas distributed across formats: 4 "animated", 3 "short", 2 "story", 3 "long" (deep-dive 5-7 min epics).
 - Ensure creative transformation of real facts/science into captivating fiction.
 - NEVER include: real living people by name, celebrity gossip, politics, tragedy exploitation, extreme graphic violence, or sexually explicit content.
 - Do not repeat or closely resemble these earlier topics: {'; '.join(history) or 'none'}.
@@ -207,7 +210,7 @@ def ensure_fresh(state: dict, llm_json, categories: list[str]) -> None:
             score = 5.0
         ideas.append({"topic": i["topic"].strip(), "angle": str(i.get("angle", "")).strip(),
                       "why_trending": str(i.get("why_trending", "")).strip(),
-                      "format": i.get("format") if i.get("format") in ("short", "long", "story") else "short",
+                      "format": i.get("format") if i.get("format") in ("short", "long", "story", "animated") else "short",
                       "style": i.get("style"), "score": score, "used": False})
     state["trends"] = {"date": today, "ideas": ideas,
                        "format_trends": [str(x) for x in data.get("format_trends", [])][:5],
@@ -216,8 +219,10 @@ def ensure_fresh(state: dict, llm_json, categories: list[str]) -> None:
 
 
 def pick_idea(fmt: str, state: dict):
-    cands = [i for i in (state.get("trends") or {}).get("ideas", [])
-             if not i.get("used") and i.get("format") == fmt]
+    all_unused = [i for i in (state.get("trends") or {}).get("ideas", []) if not i.get("used")]
+    cands = [i for i in all_unused if i.get("format") == fmt]
+    if not cands and fmt == "animated":
+        cands = [i for i in all_unused if i.get("format") in ("story", "short")]
     if not cands:
         return None
     cands.sort(key=lambda i: -i.get("score", 5))

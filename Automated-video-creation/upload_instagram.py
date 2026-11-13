@@ -440,14 +440,18 @@ def cloud_delete(public_id: str) -> None:
 def build_caption(metadata: dict) -> str:
     title = str(metadata.get("title", "")).strip()
     description = str(metadata.get("description", "")).strip()
+    lang = metadata.get("language", "en")
     raw_tags = metadata.get("hashtags", [])
-    clean_tags = " ".join([t if t.startswith("#") else f"#{t}" for t in raw_tags] + ["#reels", "#aesthetic", "#luxury", "#viral", "#glamour", "#mindset"])
+    clean_tags = " ".join(list(dict.fromkeys(
+        [t if t.startswith("#") else f"#{t}" for t in raw_tags]
+        + ["#reels", "#AIAnimation", "#storytelling", "#viral", f"#{lang}"]
+    )))
 
     caption = (
         f"{title}\n\n"
         f"{description}\n\n"
         f"{clean_tags}\n\n"
-        "✨ Follow for more daily cinematic inspiration & high-status visuals."
+        "✨ Follow for daily animated stories & global adventures."
     )
 
     return caption[:2200]
@@ -600,14 +604,58 @@ def get_permalink(
 # MAIN
 # ------------------------------------------------------------
 
+def _publish_single_reel(video_path: Path, meta_path: Path, ig_id: str, token: str, state: dict, daily_limit: int) -> bool:
+    posts = state.get("ig_posts", [])
+    if not isinstance(posts, list):
+        posts = []
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    if sum(1 for post in posts if str(post).startswith(today)) >= daily_limit:
+        summary(f"### Instagram publishing skipped\nDaily safety limit reached: {daily_limit} posts.")
+        return False
+
+    try:
+        metadata = json.loads(meta_path.read_text(encoding="utf-8"))
+    except Exception as error:
+        sys.exit(f"Could not read {meta_path}: {type(error).__name__}")
+
+    if not isinstance(metadata, dict):
+        sys.exit("metadata.json must contain a JSON object.")
+
+    if metadata.get("format") == "long":
+        print("Long-form video detected. Skipping Instagram Reels publishing.")
+        return False
+
+    video_url, public_id = cloud_upload(video_path)
+    media_id = None
+    try:
+        caption = build_caption(metadata)
+        container_id = create_reel(ig_id, token, video_url, caption)
+        wait_for_processing(container_id, token)
+        media_id = publish_reel(ig_id, container_id, token)
+    finally:
+        cloud_delete(public_id)
+
+    permalink = get_permalink(media_id, token)
+    timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    state["ig_posts"] = (posts + [timestamp])[-40:]
+    save_state(state)
+
+    summary(
+        f"### Instagram Reel published ({metadata.get('language', 'en')})\n"
+        f"**Title:** {metadata.get('title', 'Untitled')}\n"
+        f"**Instagram ID:** {ig_id}\n"
+        f"**Media ID:** {media_id}\n"
+        f"**Reel URL:** {permalink or media_id}"
+    )
+    return True
+
+
 def main():
 
     print("=" * 60)
     print("INSTAGRAM REEL AUTOMATION")
     print("Meta Instagram API - Unified Login")
     print("=" * 60)
-
-    # Validate required secrets.
 
     required_secrets = (
         "IG_ACCESS_TOKEN",
@@ -623,158 +671,31 @@ def main():
     ]
 
     if missing:
-
-        print(
-            "Instagram publishing skipped. "
-            "Missing secrets:",
-            ", ".join(missing)
-        )
-
+        print("Instagram publishing skipped. Missing secrets:", ", ".join(missing))
         return
-
-    # Validate video and metadata.
 
     if not VIDEO.exists():
-
         sys.exit("output/video.mp4 is missing.")
-
     if not META.exists():
-
         sys.exit("output/metadata.json is missing.")
 
-    try:
-
-        metadata = json.loads(
-            META.read_text(encoding="utf-8")
-        )
-
-    except Exception as error:
-
-        sys.exit(
-            f"Could not read metadata.json: "
-            f"{type(error).__name__}"
-        )
-
-    if not isinstance(metadata, dict):
-
-        sys.exit("metadata.json must contain a JSON object.")
-
-    # Skip long-form videos.
-
-    if metadata.get("format") == "long":
-
-        print(
-            "Long-form video detected. "
-            "Skipping Instagram Reels publishing."
-        )
-
-        return
-
-    # Daily posting safety limit.
-
-    state = load_state()
-
-    posts = state.get("ig_posts", [])
-
-    if not isinstance(posts, list):
-        posts = []
-
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-
-    daily_limit = int(
-        os.environ.get("MAX_IG_POSTS_PER_DAY", "10")
-    )
-
+    daily_limit = int(os.environ.get("MAX_IG_POSTS_PER_DAY", "10"))
     if daily_limit < 1:
-
         sys.exit("MAX_IG_POSTS_PER_DAY must be at least 1.")
 
-    today_posts = sum(
-        1
-        for post in posts
-        if str(post).startswith(today)
-    )
-
-    if today_posts >= daily_limit:
-
-        summary(
-            "### Instagram publishing skipped\n"
-            f"Daily safety limit reached: {daily_limit} posts."
-        )
-
-        return
-
-    # Get and validate token.
-
+    state = load_state()
     token = get_token()
-
-    # Verify the assigned Instagram account.
-
     ig_id = get_instagram_account(token)
 
-    # Upload video and publish.
+    targets = [(VIDEO, META)]
+    for lang_dir in sorted(Path("output").glob("lang_*")):
+        lv, lm = lang_dir / "video.mp4", lang_dir / "metadata.json"
+        if lv.exists() and lm.exists():
+            targets.append((lv, lm))
 
-    video_url, public_id = cloud_upload(VIDEO)
-
-    media_id = None
-
-    try:
-
-        caption = build_caption(metadata)
-
-        container_id = create_reel(
-            ig_id,
-            token,
-            video_url,
-            caption
-        )
-
-        wait_for_processing(
-            container_id,
-            token
-        )
-
-        media_id = publish_reel(
-            ig_id,
-            container_id,
-            token
-        )
-
-    finally:
-
-        # Delete temporary Cloudinary video,
-        # even if Instagram publishing fails.
-
-        cloud_delete(public_id)
-
-    # Retrieve published Reel URL.
-
-    permalink = get_permalink(
-        media_id,
-        token
-    )
-
-    # Update posting history only after publishing.
-
-    timestamp = datetime.now(
-        timezone.utc
-    ).isoformat(timespec="seconds")
-
-    state["ig_posts"] = (
-        posts + [timestamp]
-    )[-40:]
-
-    save_state(state)
-
-    # GitHub Actions summary.
-
-    summary(
-        "### Instagram Reel published successfully\n"
-        f"**Title:** {metadata.get('title', 'Untitled')}\n"
-        f"**Instagram ID:** {ig_id}\n"
-        f"**Media ID:** {media_id}\n"
-        f"**Reel URL:** {permalink or media_id}"
-    )
+    for vpath, mpath in targets:
+        if not _publish_single_reel(vpath, mpath, ig_id, token, state, daily_limit):
+            break
 
     print("\n" + "=" * 60)
     print("INSTAGRAM REEL PUBLISHING COMPLETED")

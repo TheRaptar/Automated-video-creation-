@@ -18,6 +18,26 @@
     "date": "2026-11-10",
     "ideas": [
       {
+        "topic": "The Squirrel That Helped Build The Ocean Bridge",
+        "angle": "3D Pixar mythological fable: while giant warriors carried boulders to Lanka, one tiny squirrel carried single grains of sand and earned three golden stripes",
+        "why_trending": "3D animated mythological reels viral engagement",
+        "format": "story",
+        "style": "animated_myth",
+        "target_audience": "all_ages",
+        "score": 10,
+        "used": false
+      },
+      {
+        "topic": "Sheru The Lion & Bheem's Midnight Chai Mission",
+        "angle": "3D Pixar buddy comedy: the richest lion in the universe lands his golden helicopter only for his clever friend to ask for one milk packet",
+        "why_trending": "3D animated character buddy comedies and regional Tamil/Indian animation reels",
+        "format": "story",
+        "style": "animated_comedy",
+        "target_audience": "all_ages",
+        "score": 10,
+        "used": false
+      },
+      {
         "topic": "Morning Workout Routine with Leila",
         "angle": "Follow aesthetic AI fitness influencer Leila through her 6 AM morning discipline routine, workout sets, and radiant lifestyle",
         "why_trending": "aesthetic fitness influencer routines and athletic motivation reels",
@@ -150,13 +170,13 @@
     ],
     "format_trends": [
       "1.5-second scroll-stopping narrative hook with immediate story stakes",
-      "Dramatic sound-design cues and pacing shifts right before the narrative twist",
-      "Kinetic subtitles with dynamic color accents matching the story genre (crimson for horror, sunshine yellow for kids)"
+      "3D Pixar-style animated mythological & buddy-comedy character visuals",
+      "Kinetic multilingual subtitles with dynamic color accents"
     ],
     "title_patterns": [
       "The Story Of The [Character/Place] That [Shocking Action] 👁️📖",
-      "If You Ever See [Strange Occurrence], Whatever You Do, Don't [Action] 🩸⚠️",
-      "The [Adjective] Tale Of [Character] And The [Object] ✨🦊"
+      "Every Grain Holds [Symbol]: The Untold Legend ✨🐿️",
+      "[Hero 1] Meets [Hero 2]: The Funniest Twist 😂🔥"
     ]
   },
   "videos": [
@@ -182,19 +202,23 @@
   "ig_posts": [
     "2026-11-06T16:09:06+00:00"
   ],
+  "lang_index": 0,
   "weights": {
     "category": {
+      "3D Animated Mythological & Cultural Epics": 2,
+      "3D Cartoon Character Comedies & Adventures": 2,
+      "Anime Fantasy & Folklore Shorts": 1.9,
       "Horror & Supernatural Thrillers": 1.95,
       "Children's Whimsical Fables & Adventures": 1.9,
       "Adult Psychological Thrillers & Sci-Fi": 1.9,
       "Ancient Myths, Legends & Epic Lore": 1.85,
-      "Dark Folklore & Urban Legends": 1.8,
-      "Scientific Mysteries Transformed into Stories": 1.85,
-      "Entertaining Fictional Mysteries": 1.8,
       "Photorealistic AI Influencer & Fitness Routines": 1.95,
       "space and astronomy": 1.85
     },
     "style": {
+      "animated_myth": 2,
+      "animated_comedy": 2,
+      "animated_anime": 1.9,
       "fitness_glamour": 1.95,
       "horror": 1.95,
       "fable": 1.9,
@@ -202,7 +226,7 @@
       "scifi": 1.85,
       "legend": 1.8,
       "mystery": 1.75,
-      "story": 1.8,
+      "story": 1.88,
       "allure": 1.2
     }
   }

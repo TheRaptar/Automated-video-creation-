@@ -23,17 +23,42 @@ on:
   workflow_dispatch:
     inputs:
       format:
-        description: "Video format (Shorts & Reels by default)"
+        description: "Video format (animated, short, story, or long)"
         type: choice
         options:
+          - animated
           - short
           - story
           - long
-        default: short
+        default: animated
         required: true
 
+      language:
+        description: "Primary narration & subtitle language (or 'auto' to rotate)"
+        type: choice
+        options:
+          - auto
+          - en
+          - ta
+          - hi
+          - es
+          - fr
+          - pt
+          - de
+          - ja
+          - ko
+          - ar
+          - id
+        default: en
+        required: false
+
+      dub_languages:
+        description: "Optional comma-separated extra dubs (e.g. ta,hi,es)"
+        type: string
+        required: false
+
       categories:
-        description: "Optional custom theme/niche (e.g. luxury lifestyle, aesthetic charm, cyberpunk, mindset)"
+        description: "Optional custom theme/niche (e.g. 3D Animated Mythological & Cultural Epics, 3D Cartoon Character Comedies)"
         type: string
         required: false
 
@@ -54,7 +79,9 @@ jobs:
     timeout-minutes: 120
 
     env:
-      VIDEO_FORMAT: ${{ github.event.inputs.format || 'short' }}
+      INPUT_FORMAT: ${{ github.event.inputs.format || '' }}
+      TARGET_LANGUAGE: ${{ github.event.inputs.language || 'auto' }}
+      DUB_LANGUAGES: ${{ github.event.inputs.dub_languages || '' }}
       CATEGORIES: ${{ github.event.inputs.categories || '' }}
 
       PYTHONUNBUFFERED: "1"
@@ -66,7 +93,26 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      # 2. Set up Python with dependency caching
+      # 2. Select optimal format for cron slots vs manual dispatch
+      - name: Determine effective format
+        id: pick_format
+        run: |
+          if [ -n "$INPUT_FORMAT" ]; then
+            FMT="$INPUT_FORMAT"
+          else
+            UTC_HOUR=$(date -u +%H)
+            case "$UTC_HOUR" in
+              01|11|18) FMT="animated" ;;
+              08)       FMT="long" ;;
+              15)       FMT="story" ;;
+              *)        FMT="short" ;;
+            esac
+          fi
+          echo "EFFECTIVE_FORMAT=$FMT" >> "$GITHUB_ENV"
+          echo "VIDEO_FORMAT=$FMT" >> "$GITHUB_ENV"
+          echo "Effective video format selected: $FMT"
+
+      # 3. Set up Python with dependency caching
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
@@ -74,35 +120,39 @@ jobs:
           cache: pip
           cache-dependency-path: Automated-video-creation/requirements.txt
 
-      # 3. Install FFmpeg and fonts
+      # 4. Install FFmpeg and multilingual Noto fonts
       - name: Install FFmpeg and fonts
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             ffmpeg \
             fonts-dejavu-core \
-            fonts-liberation
+            fonts-liberation \
+            fonts-noto-core \
+            fonts-noto-cjk
           ffmpeg -version
 
-      # 4. Install Python dependencies
+      # 5. Install Python dependencies
       - name: Install Python packages
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
-      # 5. Generate the video using the AI services configured in make_video.py
+      # 6. Generate the video using Gemini, Edge-TTS, Pollinations/SVG/Stock & FFmpeg
       - name: Generate AI video
         id: generate
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
 
           # Optional YouTube API key for trend research/performance feedback
           YT_API_KEY: ${{ secrets.YT_API_KEY }}
 
-          # Enable trend research
+          # Enable trend research & AI animated pipelines
           TRENDS: "1"
+          ANIMATED_MODE: "auto"
 
           # Video duration settings
           VIDEO_SECONDS: "40-60"
@@ -110,23 +160,33 @@ jobs:
 
         run: |
           echo "=================================="
-          echo "Video format: $VIDEO_FORMAT"
+          echo "Video format: $EFFECTIVE_FORMAT"
+          echo "Primary language: ${TARGET_LANGUAGE:-auto}"
+          echo "Dub languages: ${DUB_LANGUAGES:-none}"
           echo "Categories: ${CATEGORIES:-AI-selected topics}"
           echo "=================================="
 
-          python make_video.py
+          ARGS=("--format" "$EFFECTIVE_FORMAT")
+          if [ -n "$TARGET_LANGUAGE" ]; then
+            ARGS+=("--lang" "$TARGET_LANGUAGE")
+          fi
+          if [ -n "$DUB_LANGUAGES" ]; then
+            ARGS+=("--dub" "$DUB_LANGUAGES")
+          fi
 
-      # 6. Save generated videos as downloadable artifacts
+          python make_video.py "${ARGS[@]}"
+
+      # 7. Save generated videos as downloadable artifacts
       - name: Save generated videos
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: videos-${{ github.run_number }}-${{ env.VIDEO_FORMAT }}
+          name: videos-${{ github.run_number }}-${{ env.EFFECTIVE_FORMAT }}
           path: Automated-video-creation/output/
           retention-days: 14
           if-no-files-found: ignore
 
-      # 7. Upload to YouTube
+      # 8. Upload to YouTube
       - name: Upload to YouTube
         if: steps.generate.outcome == 'success'
         continue-on-error: true
@@ -139,9 +199,9 @@ jobs:
         run: |
           python upload_youtube.py
 
-      # 8. Publish Shorts and Stories to Instagram
+      # 9. Publish Animated Reels, Shorts, and Stories to Instagram
       - name: Post to Instagram
-        if: steps.generate.outcome == 'success' && env.VIDEO_FORMAT != 'long'
+        if: steps.generate.outcome == 'success' && env.EFFECTIVE_FORMAT != 'long'
         continue-on-error: true
         env:
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}

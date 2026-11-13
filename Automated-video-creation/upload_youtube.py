@@ -60,25 +60,27 @@ def get_access_token() -> str:
 
 
 def build_body(meta: dict, synthetic: bool) -> dict:
-    is_short = meta.get("format", "short") in ("short", "story")
+    is_short = meta.get("format", "short") in ("short", "story", "animated")
+    lang = meta.get("language", "en")
     desc = meta["description"].strip()
     if is_short:
         title = meta["title"].strip()[:88] + " #Shorts"
         if "#shorts" not in desc.lower():
-            desc += "\n\n#Shorts #aesthetic #luxury #viral"
+            desc += "\n\n#Shorts #AIAnimation #viral"
     else:
         title = meta["title"].strip()[:100]
-    
+
     base_tags = [h.lstrip("#") for h in meta.get("hashtags", [])]
-    viral_tags = ["Shorts", "luxury", "aesthetic", "glamour", "viral", "lifestyle", "mindset"]
+    viral_tags = ["Shorts", "AIAnimation", "storytelling", "viral", "animation"]
     combined_tags = list(dict.fromkeys(base_tags + viral_tags))[:18]
-    
+
     status = {"privacyStatus": os.environ.get("YT_PRIVACY", "public"),
               "selfDeclaredMadeForKids": False}
     if synthetic:
         status["containsSyntheticMedia"] = True
     return {"snippet": {"title": title, "description": desc[:4900], "tags": combined_tags,
-                        "categoryId": os.environ.get("YT_CATEGORY", "24")},
+                        "categoryId": os.environ.get("YT_CATEGORY", "24"),
+                        "defaultLanguage": lang, "defaultAudioLanguage": lang},
             "status": status}
 
 
@@ -108,44 +110,30 @@ def set_thumbnail(token: str, video_id: str) -> None:
         print(f"Thumbnail upload error (non-fatal): {e}")
 
 
-def main() -> None:
-    needed = ("YT_CLIENT_ID", "YT_CLIENT_SECRET", "YT_REFRESH_TOKEN")
-    if not all(os.environ.get(k) for k in needed):
-        print("YouTube secrets not set - skipping upload.")
-        return
-    if not VIDEO.exists() or not META.exists():
-        sys.exit("output/video.mp4 or output/metadata.json is missing.")
-
-    # Safety limit: protects the API quota and prevents accidental spam if more schedules are added.
-    state = load_state()
+def _upload_one(video_path: Path, meta_path: Path, token: str, synthetic: bool, state: dict, cap: int) -> bool:
     uploads = state.get("uploads", [])
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    cap = int(os.environ.get("MAX_UPLOADS_PER_DAY", "10"))
     if sum(1 for u in uploads if str(u).startswith(today)) >= cap:
-        summary(f"### Upload skipped\nDaily safety limit reached ({cap} uploads today). "
-                "The video is still available as a downloadable artifact.")
-        return
+        summary(f"### Upload skipped\nDaily safety limit reached ({cap} uploads today).")
+        return False
 
-    meta = json.loads(META.read_text(encoding="utf-8"))
-    size = VIDEO.stat().st_size
-    token = get_access_token()
-    synthetic = os.environ.get("YT_SYNTHETIC", "1") == "1"
-
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    size = video_path.stat().st_size
     r = start_session(token, build_body(meta, synthetic), size)
-    if r.status_code == 400 and synthetic:  # field not accepted -> retry without it
+    if r.status_code == 400 and synthetic:
         print(f"Retrying without synthetic-media flag ({r.text[:150]})")
         r = start_session(token, build_body(meta, False), size)
     if r.status_code == 403 and "quota" in r.text.lower():
-        summary("### YouTube upload skipped\nYouTube daily quota reached for today. Resets at midnight Pacific.")
-        return
+        summary("### YouTube upload skipped\nYouTube daily quota reached for today.")
+        return False
     if not r.ok:
         summary(f"### YouTube upload refused: {r.status_code}\n{r.text[:400]}")
-        return
+        return False
     session_url = r.headers["Location"]
 
     for attempt in range(3):
         try:
-            with open(VIDEO, "rb") as fh:
+            with open(video_path, "rb") as fh:
                 up = requests.put(session_url, data=fh, timeout=1800,
                                   headers={"Content-Type": "video/mp4", "Content-Length": str(size)})
             if up.ok:
@@ -154,27 +142,48 @@ def main() -> None:
                 wanted = os.environ.get("YT_PRIVACY", "private")
                 actual = res.get("status", {}).get("privacyStatus", wanted)
                 kind = "long-form video" if meta.get("format") == "long" else "Short"
-                summary(f"### YouTube upload done ({kind})\n**{meta['title']}**  \n"
+                lang = meta.get("language", "en")
+                summary(f"### YouTube upload done ({kind} | {lang})\n**{meta['title']}**  \n"
                         f"https://youtube.com/watch?v={vid}  (requested: {wanted}, actual: {actual})")
-                if actual != wanted:
-                    summary("\n**WARNING:** YouTube kept this video as "
-                            f"`{actual}`. New or unaudited API projects are locked to private. "
-                            "Request an API audit (YouTube API Services - Audit and Quota Extension "
-                            "form) or switch videos to public manually in YouTube Studio.")
                 if meta.get("format") == "long":
                     set_thumbnail(token, vid)
                 now = datetime.now(timezone.utc).isoformat(timespec="seconds")
                 state["uploads"] = (uploads + [now])[-40:]
                 state["videos"] = (state.get("videos", []) + [{
-                    "id": vid, "fmt": meta.get("format", "short"), "category": meta.get("category"),
-                    "style": meta.get("style"), "source": meta.get("source"), "title": meta["title"], "ts": now}])[-150:]
-                STATE.write_text(json.dumps(state, indent=2), encoding="utf-8")
-                return
+                    "id": vid, "fmt": meta.get("format", "short"), "language": lang,
+                    "category": meta.get("category"), "style": meta.get("style"),
+                    "source": meta.get("source"), "title": meta["title"], "ts": now}])[-150:]
+                STATE.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
+                return True
             print(f"Upload attempt {attempt + 1} failed: {up.status_code} {up.text[:300]}")
         except requests.RequestException as e:
             print(f"Upload attempt {attempt + 1} error: {e}")
         time.sleep(5 * (attempt + 1))
     sys.exit("YouTube upload failed after 3 attempts.")
+
+
+def main() -> None:
+    needed = ("YT_CLIENT_ID", "YT_CLIENT_SECRET", "YT_REFRESH_TOKEN")
+    if not all(os.environ.get(k) for k in needed):
+        print("YouTube secrets not set - skipping upload.")
+        return
+    if not VIDEO.exists() or not META.exists():
+        sys.exit("output/video.mp4 or output/metadata.json is missing.")
+
+    state = load_state()
+    cap = int(os.environ.get("MAX_UPLOADS_PER_DAY", "10"))
+    token = get_access_token()
+    synthetic = os.environ.get("YT_SYNTHETIC", "1") == "1"
+
+    targets = [(VIDEO, META)]
+    for lang_dir in sorted(Path("output").glob("lang_*")):
+        lv, lm = lang_dir / "video.mp4", lang_dir / "metadata.json"
+        if lv.exists() and lm.exists():
+            targets.append((lv, lm))
+
+    for vpath, mpath in targets:
+        if not _upload_one(vpath, mpath, token, synthetic, state, cap):
+            break
 
 
 if __name__ == "__main__":

@@ -149,14 +149,140 @@ def test_gemini_model_identifiers():
     disallowed = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro", "gemini-2.0-flash", "gemini-2.0-pro"]
     
     # Check default model configured in make_video.py
-    configured_model = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
+    configured_model = os.environ.get("GEMINI_MODEL", make_video.GEMINI_MODEL)
     assert configured_model not in disallowed, f"Prohibited model configured: {configured_model}"
+    assert configured_model == "gemini-4-hydrogen" or "gemini" in configured_model, f"Unexpected default model: {configured_model}"
     
     # Verify fallback models filter
     models = make_video._gemini_models()
     for m in models:
         assert m not in disallowed, f"Prohibited model in fallback list: {m}"
     return {"configured_model": configured_model, "fallback_models": models}
+
+@test("1.4 Multilingual Font & libass Subtitle Rendering (Tamil/Hindi/Arabic/CJK)")
+def test_multilingual_ass_rendering():
+    import make_video
+    import shutil
+    make_video.configure("animated")
+    make_video.WORK = SCRIPT_DIR / "work"
+    make_video.WORK.mkdir(parents=True, exist_ok=True)
+    test_work = SCRIPT_DIR / "test_lang_work"
+    test_work.mkdir(exist_ok=True)
+    orig_work = make_video.WORK
+    make_video.WORK = test_work
+    try:
+        fonts = {lang: make_video.find_font(lang) for lang in ("en", "ta", "hi", "ar")}
+        for lang, fpath in fonts.items():
+            assert Path(fpath).exists(), f"Font missing for {lang}: {fpath}"
+        # Test Unicode Tamil + Japanese chunking
+        ta_text = "சிறிய அணில் மணலைக் கொண்டு பாலம் கட்ட உதவியது"
+        ta_chunks = make_video.caption_chunks(ta_text, 3.0)
+        assert len(ta_chunks) >= 2, "Tamil caption chunking failed"
+        ja_text = "小さなリスが砂を運んで橋を作りました"
+        ja_chunks = make_video.caption_chunks(ja_text, 3.0)
+        assert len(ja_chunks) >= 2, "Japanese CJK character chunking failed"
+
+        # Render 1.5s Tamil ASS scene through FFmpeg libass
+        vis = test_work / "ta_vis.mp4"
+        aud = test_work / "ta_aud.mp3"
+        make_video.run([
+            "ffmpeg", "-y", "-f", "lavfi",
+            "-i", "gradients=s=1080x1920:c0=0x2c1654:c1=0x0f0f23:duration=1.5:speed=0.03:rate=30",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", str(vis),
+        ])
+        make_video.run([
+            "ffmpeg", "-y", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+            "-t", "1.5", "-q:a", "9", "-acodec", "libmp3lame", str(aud),
+        ])
+        sc_out = make_video.build_scene(
+            idx=101,
+            text=ta_text,
+            visual=vis,
+            audio=aud,
+            dur=1.5,
+            font=fonts["ta"],
+            heading="அணில் கதை",
+            style_meta={"style": "animated_myth"},
+            lang="ta",
+        )
+        assert sc_out.exists() and make_video.media_duration(sc_out) >= 1.4, "Tamil libass scene failed"
+        return {"fonts_checked": list(fonts.keys()), "ta_chunks": len(ta_chunks), "ja_chunks": len(ja_chunks)}
+    finally:
+        make_video.WORK = orig_work
+        shutil.rmtree(test_work, ignore_errors=True)
+
+@test("1.5 AI Animated Vector SVG & 2.5D Motion Pipeline")
+def test_animated_svg_motion_pipeline():
+    import make_video
+    import shutil
+    make_video.configure("animated")
+    test_work = SCRIPT_DIR / "test_anim_work"
+    test_work.mkdir(exist_ok=True)
+    orig_work, orig_offline = make_video.WORK, make_video.OFFLINE
+    make_video.WORK = test_work
+    make_video.OFFLINE = True
+    try:
+        svg_path = test_work / "scene_0.svg"
+        png_path = test_work / "scene_0.png"
+        svg_code = make_video._procedural_svg("animated_myth", 0)
+        svg_path.write_text(svg_code, encoding="utf-8")
+        make_video.run(["ffmpeg", "-y", "-i", str(svg_path), "-vf", f"scale={make_video.W}:{make_video.H}", str(png_path)])
+        assert make_video._valid_image(png_path), "SVG rasterization to PNG via FFmpeg librsvg failed"
+
+        vid_path = make_video.make_animated_visual(
+            idx=0,
+            sc={"image_prompt": "Tiny squirrel carrying golden sand on ocean bridge", "camera_motion": "dolly_pulse", "fx": "golden_glow"},
+            total=2.0,
+            style="animated_myth",
+        )
+        assert vid_path and vid_path.exists() and make_video._valid_video(vid_path), "Animated 2.5D video synthesis failed"
+        return {"png_bytes": png_path.stat().st_size, "animated_clip": vid_path.name}
+    finally:
+        make_video.WORK = orig_work
+        make_video.OFFLINE = orig_offline
+        shutil.rmtree(test_work, ignore_errors=True)
+
+@test("1.6 Long-Form Multi-Chapter & Constant-FPS Concat E2E")
+def test_long_form_architecture():
+    import make_video
+    import shutil
+    make_video.configure("long")
+    assert (make_video.W, make_video.H) == (1920, 1080), "Long format must configure 1920x1080 landscape"
+    orig_offline = make_video.OFFLINE
+    make_video.OFFLINE = True
+    test_work = SCRIPT_DIR / "test_long_work"
+    test_work.mkdir(exist_ok=True)
+    orig_work = make_video.WORK
+    make_video.WORK = test_work
+    try:
+        script = make_video.generate_long("Mystery of the Ramayana Bridge", [], {}, lang="en")
+        chapters = script.get("chapters", [])
+        scenes = script.get("scenes", [])
+        assert len(chapters) >= 4, f"Expected >=4 chapters in long-form script, got {len(chapters)}"
+        assert len(scenes) >= 12, f"Expected >=12 scenes in long-form script, got {len(scenes)}"
+        assert script.get("_already_reviewed") is True, "Long-form should mark chapters as pre-reviewed"
+
+        # Verify constant FPS landscape gradient + concat stability across 2 scenes
+        built = []
+        for idx in range(2):
+            v = test_work / f"lv_{idx}.mp4"
+            a = test_work / f"la_{idx}.mp3"
+            make_video._gradient(v, 1.5, style="legend")
+            make_video.run(["ffmpeg", "-y", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo", "-t", "1.5", "-q:a", "9", "-acodec", "libmp3lame", str(a)])
+            s = make_video.build_scene(idx, scenes[idx]["text"], v, a, 1.5, make_video.find_font("en"), heading=f"Chapter {idx+1}", lang="en")
+            built.append(s)
+        joined = test_work / "long_joined.mp4"
+        clist = test_work / "concat.txt"
+        clist.write_text("\n".join(f"file '{p.resolve()}'" for p in built), encoding="utf-8")
+        make_video.run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(clist), "-c", "copy", "-movflags", "+faststart", str(joined)])
+        total_dur = make_video.media_duration(joined)
+        assert 2.8 <= total_dur <= 3.6, f"Long-form concat duration drift detected: {total_dur}s"
+        return {"chapters": len(chapters), "scenes": len(scenes), "concat_dur": total_dur}
+    finally:
+        make_video.OFFLINE = orig_offline
+        make_video.WORK = orig_work
+        make_video.configure("short")
+        shutil.rmtree(test_work, ignore_errors=True)
 
 # -------------------------------------------------------------
 # 3. Persistent Memory Across Multiple Executions
@@ -290,6 +416,7 @@ def test_raptar_agent_engine():
         format_type="short"
     )
     valid_styles = [
+        "animated_myth", "animated_comedy", "animated_anime",
         "horror", "fable", "thriller", "scifi", "legend", "mystery",
         "fitness_glamour",
         "allure", "chemistry", "charm", "seduction", "romance",
@@ -315,6 +442,33 @@ def test_raptar_agent_engine():
         "self_learning": True,
     }
 
+@test("7.2 Multilingual Registry, Animated Genres & Translation Preservation")
+def test_multilingual_and_animated_agent():
+    from raptar_agent import RaptarAgent, LANGUAGES
+    agent = RaptarAgent(script_dir=SCRIPT_DIR)
+    assert len(LANGUAGES) >= 10, f"Expected >=10 languages, got {len(LANGUAGES)}"
+    for code in ("en", "ta", "hi", "es", "fr", "pt", "de", "ja", "ko", "ar", "id"):
+        assert code in LANGUAGES, f"Language missing: {code}"
+        voice = agent.get_voice_for_language(code)
+        assert voice and "Neural" in voice, f"Missing neural voice for {code}: {voice}"
+
+    # Verify animated comedy profile & script planning
+    topic_info = agent.evaluate_and_pick_topic(
+        {},
+        ["3D Cartoon Character Comedies & Adventures", "3D Animated Mythological & Cultural Epics"],
+        format_type="animated",
+        lang="ta",
+    )
+    assert topic_info["language"] == "ta", "Topic info should record target language ta"
+    script = agent.plan_script(topic_info, format_type="animated", lang="ta")
+    assert len(script.get("scenes", [])) >= 4, "Animated script should plan at least 4 scenes"
+    assert "camera_motion" in script["scenes"][0], "Animated scene missing camera_motion"
+
+    # Translate offline fallback should safely preserve scene count
+    dubbed = agent.translate_script(script, "hi")
+    assert dubbed["language"] == "hi" and len(dubbed["scenes"]) == len(script["scenes"])
+    return {"languages": len(LANGUAGES), "animated_style": topic_info["style"], "scenes": len(script["scenes"])}
+
 if __name__ == "__main__":
     print("=====================================================")
     print("        RAPTAR TECHNICAL VERIFICATION SUITE         ")
@@ -323,6 +477,9 @@ if __name__ == "__main__":
     test_ffmpeg_and_fonts()
     test_caption_chunks()
     test_video_assembly()
+    test_multilingual_ass_rendering()
+    test_animated_svg_motion_pipeline()
+    test_long_form_architecture()
     test_script_schema()
     test_gemini_model_identifiers()
     test_persistent_memory()
@@ -330,6 +487,7 @@ if __name__ == "__main__":
     test_instagram_logic()
     test_performance_weights()
     test_raptar_agent_engine()
+    test_multilingual_and_animated_agent()
     
     print("\n=====================================================")
     print("                   TEST SUMMARY                      ")

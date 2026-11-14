@@ -1,6 +1,6 @@
-# RAPTAR: Autonomous AI Video Creation & Social Media Automation System
+# RAPTAR: Organic-Growth AI Video Creation & Publishing System
 
-RAPTAR is an autonomous AI-operated animated Reels, YouTube Shorts, and Long-Form video creation and social media publishing system. It researches trending topics, writes multi-genre animated/storytelling scripts in **11 languages**, generates AI artwork and vector SVG scenes with 2.5D camera choreography, synthesizes multilingual neural voiceovers and `libass` kinetic subtitles, renders crisp 9:16 Reels/Shorts or 16:9 multi-chapter long-form videos with FFmpeg, and publishes automatically to YouTube and Instagram.
+RAPTAR is an autonomous YouTube & Instagram video creation system engineered for **organic audience growth, retention, CTR optimization, and continuous performance learning**.
 
 ---
 
@@ -10,24 +10,24 @@ RAPTAR is an autonomous AI-operated animated Reels, YouTube Shorts, and Long-For
 +-----------------------------------------------------------------------------------------+
 |                        AUTONOMOUS AGENT ORCHESTRATOR (server.ts)                        |
 |  - Headless Node.js / Express Engine (Port 3000)                                        |
-|  - Gemini 4 Hydrogen Brain (Planning, Fact-Checking, Multilingual Adaptation)           |
-|  - Safety Dual Mode Gate: [Full Auto] vs. [Approval Gate]                               |
-|  - HTTP 206 Streaming Media Server & Automated Scheduler                                |
+|  - Safety Gate: [Approval Gate] vs. [Autonomous] + Analytics & QC API (/api/analytics)  |
 +-----------------------------------------------------------------------------------------+
                                            |
-                              Subprocess IPC & File Sync
-                                           |
 +-----------------------------------------------------------------------------------------+
-|                            PYTHON ANIMATION & VIDEO PIPELINE                            |
-|  - raptar_agent.py     -> Multi-genre persona planner, 11-language dubbing & audit      |
-|  - trends.py           -> Market Research (Google Trends, Wikipedia, YouTube signals)   |
-|  - make_video.py       -> Free Real AI Video (Wan 2.2 Lightning I2V, LTX-Video Distilled,  |
-|                           Pollinations Flux + Seamless Boomerang Normalization, Edge-TTS,   |
-|                           libass Multilingual Subtitles, Multi-Chapter Long-Form)           |
-|  - upload_youtube.py   -> YouTube Data API v3 Uploader (primary + language variants)    |
-|  - upload_instagram.py -> Instagram Graph API v23.0 Reels Uploader (primary + dubs)     |
-|  - history.json        -> 300-topic anti-repetition FIFO memory                         |
-|  - state.json          -> Dynamic category/style/language performance weights           |
+|                         PYTHON GROWTH & PRODUCTION PIPELINE                             |
+|  - trends.py           -> Multi-source research (Google Trends, News, YouTube Search     |
+|                           Suggestions, Reddit, Wikipedia, YT Data API) + 7-factor score  |
+|  - raptar_agent.py     -> High-retention scripting (0-3s hook, 3-15s curiosity gap,     |
+|                           middle pattern interrupts, payoff CTA) + 11-language dubbing  |
+|  - growth_engine.py    -> Procedural BGM + sidechain narration ducking, 3-concept CTR    |
+|                           thumbnails, 5-title YouTube SEO, 10-factor AI QC evaluator, &   |
+|                           YouTube Analytics API v2 channel learning engine              |
+|  - make_video.py       -> Adaptive Shorts (1080x1920) & Long-form (1920x1080) FX,       |
+|                           inline keyword-highlighted captions, semantic non-repeating    |
+|                           stock/AI visual matching + licensing attribution              |
+|  - upload_youtube.py   -> Separated Short/Long caps, duplicate & QC gates, thumbnail    |
+|                           upload, Analytics feedback loop & publish logs                |
+|  - upload_instagram.py -> Instagram Graph API v23.0 Reels publisher                     |
 +-----------------------------------------------------------------------------------------+
 ```
 
@@ -38,47 +38,31 @@ RAPTAR is an autonomous AI-operated animated Reels, YouTube Shorts, and Long-For
 ```
 .
 ├── .env.example                     # Environment variables template (no secrets)
-├── .gitignore                       # Clean ignore rules (excludes media, tokens, work dirs)
-├── .github/
-│   └── workflows/
-│       └── daily.yml                # 7x/day global schedule (animated, short, story, long)
-├── Automated-video-creation/        # Core Python Production Pipeline
-│   ├── history.json                 # 300-entry topic anti-repetition blacklist
-│   ├── make_video.py                # Real AI Video & FFmpeg/libass assembly engine
-│   ├── raptar_agent.py              # Multi-language & animated genre autonomous agent
+├── .github/workflows/daily.yml      # Focused 3x/day growth schedule (animated, long, short)
+├── Automated-video-creation/
+│   ├── growth_engine.py             # BGM ducking, 3-concept thumbnails, SEO, QC & Analytics AI
+│   ├── history.json                 # 300-entry topic anti-repetition memory
+│   ├── make_video.py                # Video & audio production pipeline
+│   ├── raptar_agent.py              # High-retention scripting & 11-language adaptation
 │   ├── requirements.txt             # Python dependencies
-│   ├── state.json                   # Strategic weights, language index, uploads & trends
-│   ├── trends.py                    # Multi-source trend scraper & feedback loops
+│   ├── state.json                   # Channel learnings, weights, used media IDs & publish logs
+│   ├── trends.py                    # Multi-source topic research & 7-factor scorer
 │   ├── upload_instagram.py          # Instagram Graph API v23.0 Reels uploader
-│   └── upload_youtube.py            # YouTube Data API v3 OAuth uploader
+│   └── upload_youtube.py            # YouTube Data API v3 uploader + Analytics API v2 sync
 ├── metadata.json                    # Project metadata & permissions
 ├── package.json                     # Node.js dependencies & run scripts
 ├── requirements.txt                 # Root Python requirements
-├── server.ts                        # Headless Express backend & Agent Orchestrator
-└── tests/                           # Technical Verification & Audit Suite
-    ├── verify_raptar.py             # Python engine, FFmpeg, libass, AI video & schema tests
-    └── test_api.ts                  # REST API & streaming endpoint test suite
+├── server.ts                        # Headless Express backend & REST API
+└── tests/
+    ├── verify_raptar.py             # Full Python & Growth Engine verification suite
+    └── test_api.ts                  # REST API & HTTP 206 streaming test suite
 ```
 
 ---
 
-## 3. Prerequisites & Dependencies
+## 3. Prerequisites & Setup
 
-### System Requirements
-* **Node.js**: v18.0.0 or higher (v20+ recommended)
-* **Python**: v3.10 or higher
-* **FFmpeg**: v4.4+ with `libx264`, `libass` (HarfBuzz + FriBidi), and `librsvg` support
-* **Multilingual Noto Fonts**: `fonts-noto-core`, `fonts-noto-cjk`, `fonts-dejavu-core`, `fonts-liberation`
-
-### Installing System Dependencies (Debian / Ubuntu)
-```bash
-sudo apt-get update
-sudo apt-get install -y ffmpeg fonts-dejavu-core fonts-liberation fonts-noto-core fonts-noto-cjk
-```
-
----
-
-## 4. Installation & Setup
+* **Node.js** v18+, **Python** v3.10+, **FFmpeg** (with `libx264`, `libass`, `librsvg`), and **Noto fonts** (`fonts-noto-core`, `fonts-noto-cjk`).
 
 ```bash
 python3 -m pip install -r requirements.txt
@@ -86,67 +70,33 @@ npm install
 cp .env.example .env
 ```
 
-Key environment variables in `.env`:
-* `GEMINI_API_KEY`: Free-tier key for autonomous agent planning, scriptwriting, and translation.
-* `FREE_VIDEO_PROVIDER`: `auto` (Pollinations Flux -> Wan 2.2 Lightning I2V -> LTX-Video I2V/T2V -> 2.5D Ken Burns fallback) | `i2v` | `t2v` | `kenburns`.
-* `HF_TOKEN`: Optional $0 free Hugging Face read token (`huggingface.co/settings/tokens`) for higher daily ZeroGPU quota and unlocking LTX-2.3 / Wan 2.1 Fast.
-* `PIXABAY_API_KEY` / `PEXELS_API_KEY`: Optional stock footage fallback.
-* `TARGET_LANGUAGE`: `auto` | `en` | `ta` | `hi` | `es` | `fr` | `pt` | `de` | `ja` | `ko` | `ar` | `id`.
-* `DUB_LANGUAGES`: Optional comma-separated extra dubbed variants rendered per run (e.g. `ta,hi,es`).
-* `YT_CLIENT_ID`, `YT_CLIENT_SECRET`, `YT_REFRESH_TOKEN`: For YouTube publishing.
-* `IG_ACCESS_TOKEN`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`: For Instagram Reels publishing.
-
 ---
 
-## 5. Running the Application
+## 4. Running & Testing
 
-### Headless Server (Port 3000)
 ```bash
+# Start headless server on port 3000
 npm run dev
-```
 
-### Headless Autonomous Video Production (CLI)
-```bash
+# Generate a Short / Animated Reel / Long-Form video
 cd Automated-video-creation
-
-# Generate an AI animated Reel / Short (3D myth, 3D cartoon comedy, or anime style)
-python3 make_video.py --format animated
-
-# Generate in a specific language (Tamil) + dub extra localized variants (English, Hindi)
-python3 make_video.py --format animated --lang ta --dub en,hi
-
-# Generate a 16:9 Long-Form multi-chapter video (5-7 minutes with chapters & thumbnail)
+python3 make_video.py --format short
+python3 make_video.py --format animated --lang en
 python3 make_video.py --format long
 
-# Generate a video with a custom topic
-python3 make_video.py --format animated "Every grain holds the bridge: Tiny squirrel Ramayana story"
+# Offline verification build
+OFFLINE_TEST=1 python3 make_video.py --format short
 
-# Run offline assembly test (no internet or API keys required)
-OFFLINE_TEST=1 python3 make_video.py --format animated --lang ta
-```
-
-### Social Media Upload Scripts
-```bash
-cd Automated-video-creation
-python3 upload_youtube.py
-python3 upload_instagram.py
-```
-
----
-
-## 6. Running the Technical Verification Suite
-
-```bash
+# Run full test suites
+cd ..
 python3 tests/verify_raptar.py
 npx tsx tests/test_api.ts
 ```
 
 ---
 
-## 7. Safety & Compliance Guardrails
+## 5. Key Growth & Safety Controls
 
-* **Default Mode: Approval Gate**: By default, `server.ts` stages videos in `ready_for_approval` without publishing until explicitly approved.
-* **YouTube Compliance**: Automatically tags generated media with `containsSyntheticMedia: True` and sets `defaultLanguage` / `defaultAudioLanguage`.
-* **Instagram Compliance**: Uses Instagram Graph API v23.0 container polling and respects daily upload caps.
-* **Rate Limits & Anti-Repetition**: Enforces 300-topic FIFO memory and constant-timebase FFmpeg normalization across multi-chapter renders.
-
+- **Zero Spam Publishing**: Separated daily caps (`MAX_SHORTS_PER_DAY=2`, `MAX_LONG_PER_DAY=1`) and consistent default channel language (`TARGET_LANGUAGE=en`).
+- **Pre-Publish Quality Gate**: Every video is evaluated 1–10 across 10 retention, audio, visual, thumbnail, title, and originality factors before upload.
+- **Duplicate & Compliance Protections**: Fuzzy Jaccard anti-repetition for both topic ideation (`trends.py`) and upload verification (`upload_youtube.py`), plus `containsSyntheticMedia: True`.

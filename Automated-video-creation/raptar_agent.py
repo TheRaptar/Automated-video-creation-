@@ -599,13 +599,22 @@ class RaptarAgent:
         profile = self.get_audience_profile(category, lang=lang)
 
         avoid_topics = "; ".join(history[-60:]) if history else "none"
-        prompt = f"""You are a master animation director, storyteller, and creative producer.
+        learnings = state.get("learnings") or {}
+        learn_note = ""
+        if learnings:
+            learn_note = (
+                f"\nChannel Analytics Learnings:\n"
+                f"- Top-performing styles: {learnings.get('winning_styles', [])}\n"
+                f"- Proven high-interest topics: {learnings.get('top_topics', [])}\n"
+                f"- Best title hooks: {learnings.get('top_title_patterns', [])}\n"
+            )
+        prompt = f"""You are a master YouTube Growth Strategist, animation director, and creative producer.
 Target Category: {category}
 Target Audience: {profile['target_audience']}
 Genre Style: {profile['style']}
 Output Language: {lang_meta['name']} ({lang}) — Write "title" and "angle" natively in {lang_meta['name']}. Write "topic" clearly so it tracks anti-repetition.
 Target Video Format: {format_type}
-
+{learn_note}
 Audience Guidelines:
 - animated_myth: Inspiring 3D animated mythological/historical fables (like the tiny squirrel carrying sand for Lord Rama's bridge, or ancient heroic wisdom).
 - animated_comedy: Hilarious vibrant 3D animated buddy adventures (like an eccentric billionaire lion & street-smart friend with funny cultural twists).
@@ -620,8 +629,8 @@ Avoid repeating or closely resembling: {avoid_topics}
 Return ONLY JSON:
 {{
   "topic": "precise story topic name",
-  "title": "high-CTR title under 70 characters in {lang_meta['name']} with emoji",
-  "angle": "central narrative hook, visual twist, or comedy beat",
+  "title": "high-CTR accurate non-clickbait title under 65 characters in {lang_meta['name']}",
+  "angle": "central 0-3s curiosity gap, visual twist, or comedy beat",
   "style": "{profile['style']}",
   "category": "{category}",
   "target_audience": "{profile['target_audience']}",
@@ -671,32 +680,46 @@ Return ONLY JSON:
         profile = self.get_audience_profile(topic_info.get("style") or topic_info.get("category") or "", lang=chosen_lang)
         target_audience = topic_info.get("target_audience") or profile["target_audience"]
 
-        prompt = f"""You are a master animation director, screenwriter, and multi-language storyteller.
+        state = self.load_state()
+        learnings = state.get("learnings") or {}
+        best_hooks = learnings.get("best_hooks") or []
+        opt_short = learnings.get("optimal_short_duration", 38)
+        target_words = int(opt_short * 2.5) if format_type != "long" else 850
+
+        prompt = f"""You are a master YouTube retention writer, animation director, and multi-language storyteller.
 Topic: {topic_info['topic']}
 Title: {topic_info['title']}
 Narration Language: {lang_meta['name']} ({chosen_lang})
 Genre Style: {topic_info.get('style', profile['style'])}
 Target Audience: {target_audience}
 Format: {format_type}
+Proven Channel Hooks: {best_hooks}
 
-DIRECTOR'S GUIDELINES:
+MANDATORY HIGH-RETENTION STRUCTURE:
+1. First 0-3s (Scene 1): Immediate explosive hook creating an open curiosity gap under 14 words. NEVER start with "Hello everyone", "Welcome back", "Hey guys", or "In today's video".
+2. Next 3-15s (Scene 2): Introduce the core conflict/topic and pose an unanswered question or surprising stake giving viewers a clear reason to keep watching.
+3. Middle Section (Scenes 3+): Deliver vivid storytelling, unexpected twists, and pattern interrupts (shift pace or reveal a twist). Eliminate all filler sentences; sound natural, conversational, and human.
+4. Final Scene: Deliver a rewarding payoff plus a natural next-video CTA / seamless loop in {lang_meta['name']}.
+
+PRODUCTION GUIDELINES:
 - Language: Write "title", "description", "hashtags", and every scene's "text" natively, naturally, and expressively in {lang_meta['name']}.
-- Visual Prompts: Write every "image_prompt", "motion_prompt", and "search_terms" strictly in ENGLISH for optimal AI visual & video rendering.
+- Visual Prompts: Write every "image_prompt", "motion_prompt", and "search_terms" strictly in ENGLISH matching the exact narration of that scene.
 - Character Continuity: Describe the main animated character(s) consistently in every scene's image_prompt.
-- Temporal Motion Prompt: Write "motion_prompt" describing physical action, facial expressions, blinking, cloth/hair/water movement, and smooth camera tracking for AI video models (Wan 2.2 / LTX-Video).
+- Temporal Motion Prompt: Write "motion_prompt" describing physical action, facial expressions, cloth/hair/water movement, and smooth camera tracking for AI video models (Wan 2.2 / LTX-Video).
 - Camera Motion: Choose an ideal camera_motion per scene from ["zoom_in", "zoom_out", "pan_left", "pan_right", "pan_up", "dolly_pulse"].
 - Visual FX: Choose fx from ["cinematic", "warm_glow", "sparkles", "eerie_vignette", "vibrant"].
 - Art Style: {profile['art_style']}
 - Tone: {profile['tone']}
-- Exactly {num_scenes} sequential scenes, totaling ~{95 if format_type != 'long' else 850} words of spoken narration.
+- Exactly {num_scenes} sequential scenes, totaling ~{target_words} words of spoken narration.
 - Never ask for text, letters, or watermarks inside "image_prompt" or "motion_prompt".
 
 Return ONLY JSON:
 {{
   "topic": "{topic_info['topic']}",
-  "title": "engaging title in {lang_meta['name']}",
-  "description": "compelling summary in {lang_meta['name']}",
-  "hashtags": ["#story", "#animation", "#{chosen_lang}", "#viral"],
+  "title": "engaging accurate non-clickbait title in {lang_meta['name']}",
+  "description": "compelling opening summary in {lang_meta['name']}",
+  "hashtags": ["#Storytelling", "#AIAnimation", "#{chosen_lang}"],
+  "ideal_seconds": {opt_short if format_type != 'long' else 330},
   "language": "{chosen_lang}",
   "target_audience": "{target_audience}",
   "style": "{topic_info.get('style', profile['style'])}",
@@ -709,8 +732,8 @@ Return ONLY JSON:
   "scenes": [
     {{
       "text": "spoken narration in {lang_meta['name']}",
-      "search_terms": ["english visual query 1", "english visual query 2"],
-      "image_prompt": "detailed animated keyframe description in ENGLISH, no text/letters",
+      "search_terms": ["exact english visual matching this line", "fallback visual query"],
+      "image_prompt": "detailed animated keyframe description in ENGLISH matching this exact narration, no text/letters",
       "motion_prompt": "dynamic character action and smooth camera motion in ENGLISH for 24fps AI video",
       "camera_motion": "zoom_in",
       "fx": "cinematic"
@@ -783,7 +806,7 @@ Return ONLY JSON:
                     "topic": topic_info["topic"],
                     "title": topic_info["title"],
                     "description": "When the richest animated lion meets a street-smart buddy with one mission!",
-                    "hashtags": ["#AIAnimation", "#3DCartoon", "#ComedyReels", "#Shorts", "#Viral"],
+                    "hashtags": ["#AIAnimation", "#3DCartoon", "#ComedyReels", "#Shorts", "#CartoonComedy"],
                     "language": chosen_lang,
                     "target_audience": "all_ages",
                     "style": "animated_comedy",
@@ -907,7 +930,7 @@ Return ONLY JSON:
 {{
   "title": "adapted high-CTR title in {lang_meta['name']} under 70 chars",
   "description": "adapted 1-2 sentence description in {lang_meta['name']}",
-  "hashtags": ["#story", "#{lang_meta['name'].replace(' ', '')}", "#animation", "#viral"],
+  "hashtags": ["#story", "#{lang_meta['name'].replace(' ', '')}", "#animation", "#Storytelling"],
   "scenes": ["localized scene 1 narration", "... exact same count ({len(scenes)}) ..."]
 }}"""
 
@@ -950,14 +973,14 @@ Return ONLY JSON:
         style = script.get("style", "story")
         texts = [s.get("text", "") for s in scenes]
 
-        prompt = f"""You are a senior story editor and content safety reviewer for a {lang_name} ({style}) video titled "{script.get('title')}".
+        prompt = f"""You are a senior YouTube retention editor and safety reviewer for a {lang_name} ({style}) video titled "{script.get('title')}".
 Narration Scenes (in {lang_name}):
 {json.dumps(texts, indent=2, ensure_ascii=False)}
 
 Review each scene for:
-1. Smooth storytelling pacing, vivid spoken rhythm, and strong opening hook in {lang_name}.
-2. Keep fictional, mythological, comedic, or animated storytelling creative — do NOT turn fables or fiction into dry textbook facts.
-3. Ensure strict YouTube & Instagram community guideline compliance (no hate speech, no graphic gore, no explicit content).
+1. Immediate 0-3s hook in Scene 1: strictly remove any generic openings ("Hello everyone", "Welcome back", "Hey guys", "In today's video").
+2. Natural conversational storytelling rhythm, curiosity gaps in early scenes, clear pattern interrupts in middle scenes, and zero filler.
+3. Strict YouTube & Instagram community guideline compliance (no hate speech, no graphic gore, no explicit content).
 4. Keep the EXACT same number of scenes ({len(texts)}) and keep all text in {lang_name}.
 
 Return ONLY JSON:

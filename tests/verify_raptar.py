@@ -508,6 +508,173 @@ def test_free_ai_video_engine():
         shutil.rmtree(test_work, ignore_errors=True)
 
 
+# -------------------------------------------------------------
+# 8. Organic Growth Engine, SEO, Thumbnails, QC & Learning Tests
+# -------------------------------------------------------------
+@test("8.1 Multi-Factor Topic Scoring & Duplicate Detection")
+def test_growth_topic_scoring():
+    import trends
+    dup = trends.is_duplicate_topic(
+        "The Squirrel That Built The Ocean Bridge",
+        ["The Squirrel That Helped Build The Ocean Bridge"],
+    )
+    assert dup is True, "Fuzzy duplicate detection failed to catch near-identical topic"
+    not_dup = trends.is_duplicate_topic(
+        "Why Deep Sea Jellyfish Glow Under Extreme Pressure",
+        ["The Squirrel That Helped Build The Ocean Bridge"],
+    )
+    assert not_dup is False, "Unique topic falsely flagged as duplicate"
+
+    sig = {
+        "google": {"US": [{"term": "deep sea jellyfish", "traffic": "50K+", "news": []}]},
+        "news": [{"headline": "Bioluminescent deep sea discovery puzzles scientists"}],
+        "reddit": [{"sub": "todayilearned", "title": "Why deep sea creatures glow in the dark", "score": 5000, "comments": 400}],
+        "yt_suggest": ["why deep sea jellyfish glow"],
+        "wiki": [{"title": "Bioluminescence", "views": 85000}],
+        "youtube": {},
+    }
+    score, breakdown = trends.score_topic_idea(
+        {"topic": "Why Deep Sea Jellyfish Glow", "angle": "Hidden truth of bioluminescence", "style": "scifi"},
+        sig,
+        history=["Old Unrelated Topic"],
+        learnings={"winning_styles": ["scifi"]},
+    )
+    assert 1.0 <= score <= 10.0, f"Score out of bounds: {score}"
+    assert len(breakdown) == 7, f"Expected 7 scoring factors, got {len(breakdown)}"
+    return {"score": score, "factors": list(breakdown.keys())}
+
+
+@test("8.2 BGM Synthesis, Sidechain Ducking & Keyword Captions")
+def test_bgm_ducking_and_keywords():
+    import growth_engine
+    import make_video
+    import shutil
+    test_work = SCRIPT_DIR / "test_bgm_work"
+    test_work.mkdir(exist_ok=True)
+    try:
+        # Test banned opening scrub & inline keyword color injection
+        scrubbed = make_video._scrub_banned_opening("Hello everyone! Welcome back to my channel. Oceans glow at night.")
+        assert not scrubbed.lower().startswith("hello"), f"Banned opening survived: {scrubbed}"
+        hl = make_video._highlight_keywords_in_chunk("THE MYSTERIOUS OCEAN", "&H0000E5FF", "en")
+        assert r"\c&H0000E5FF" in hl, f"Keyword inline highlight missing: {hl}"
+
+        # Create dummy 2s voiceover video and mix synthesized BGM
+        vid_in = test_work / "voice_vid.mp4"
+        bgm = test_work / "bgm.mp3"
+        make_video.run([
+            "ffmpeg", "-y", "-f", "lavfi",
+            "-i", "gradients=s=1080x1920:c0=0x101828:c1=0x1e293b:duration=2.0:rate=30",
+            "-f", "lavfi", "-i", "sine=frequency=440:duration=2.0",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-ar", "44100", "-ac", "2", str(vid_in),
+        ])
+        assert growth_engine.synthesize_bgm("animated_myth", 2.5, bgm) and bgm.exists()
+        mixed_ok = growth_engine.mix_narration_and_bgm(vid_in, bgm, vid_in, bgm_volume=0.14)
+        assert mixed_ok is True, "BGM sidechain ducking mix failed"
+        probe = growth_engine.probe_media(vid_in)
+        assert probe.get("valid") and probe.get("sample_rate", 0) >= 44100
+        return {"bgm_bytes": bgm.stat().st_size, "mixed_duration": probe["duration"]}
+    finally:
+        shutil.rmtree(test_work, ignore_errors=True)
+
+
+@test("8.3 3-Concept Thumbnails, 5-Title SEO & 10-Factor AI QC")
+def test_thumbnails_seo_qc():
+    import growth_engine
+    import make_video
+    import shutil
+    make_video.configure("short")
+    test_work = SCRIPT_DIR / "test_qc_work"
+    test_work.mkdir(exist_ok=True)
+    try:
+        vid = test_work / "sample.mp4"
+        thumb = test_work / "thumbnail.jpg"
+        make_video.run([
+            "ffmpeg", "-y", "-f", "lavfi",
+            "-i", "gradients=s=1080x1920:c0=0x182848:c1=0x4b6cb7:duration=3.0:rate=30",
+            "-f", "lavfi", "-i", "sine=frequency=320:duration=3.0",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-ar", "44100", "-ac", "2", str(vid),
+        ])
+        script = {
+            "topic": "Deep Sea Glowing Fish",
+            "title": "Why Deep Sea Fish Glow In Total Darkness",
+            "description": "Bioluminescent creatures light up the abyss.",
+            "hashtags": ["#DeepSea", "#Science"],
+            "style": "scifi",
+            "format": "short",
+            "language": "en",
+            "scenes": [
+                {"text": "Seven miles beneath the ocean, fish create their own sunlight."},
+                {"text": "Why would predators light themselves up in pitch blackness?"},
+                {"text": "The chemical luciferin turns darkness into a survival weapon."},
+                {"text": "Follow for more deep ocean mysteries."},
+            ],
+        }
+        seo = growth_engine.optimize_youtube_seo(script, offline=True)
+        assert len(seo["title_variations"]) == 5, f"Expected 5 title variants, got {len(seo['title_variations'])}"
+        assert seo["category_id"] == "28", f"Expected Science category 28, got {seo['category_id']}"
+
+        font = make_video.find_font("en")
+        t_rep = growth_engine.generate_thumbnails(vid, script, test_work, thumb, font, seo=seo, offline=True)
+        assert thumb.exists() and thumb.stat().st_size > 2000, "Winning thumbnail not saved"
+        assert len(t_rep.get("candidates", [])) == 3, f"Expected 3 thumbnail concepts, got {len(t_rep.get('candidates', []))}"
+
+        meta = {
+            "format": "short",
+            "language": "en",
+            "topic": script["topic"],
+            "title": seo["selected_title"],
+            "bgm_mixed": True,
+            "transitions_applied": True,
+            "seo": seo,
+        }
+        qc = growth_engine.evaluate_video_quality(vid, meta, script, thumb_report=t_rep, offline=True)
+        assert len(qc["scores"]) == 10, f"Expected 10 QC factors, got {len(qc['scores'])}"
+        assert qc["passed"] is True and qc["overall_score"] >= 6.5, f"Valid sample failed QC: {qc}"
+        return {"titles": 5, "thumb_candidates": 3, "qc_score": qc["overall_score"]}
+    finally:
+        shutil.rmtree(test_work, ignore_errors=True)
+
+
+@test("8.4 Analytics Learning Engine & Upload Duplicate/QC Guards")
+def test_analytics_and_upload_guards():
+    import growth_engine
+    import upload_youtube
+    fake_state = {
+        "videos": [
+            {
+                "id": "yt1", "fmt": "short", "language": "en", "style": "animated_myth", "category": "Epics",
+                "topic": "Ancient Ocean Bridge", "title": "The Tiny Squirrel Who Changed History",
+                "hook": "Why did giant warriors stop for a tiny squirrel?", "duration": 36.0,
+                "thumbnail_concept": "concept_a_high_contrast_hook",
+                "views": 18500, "likes": 1100, "avg_view_percentage": 88.0, "ctr": 7.4,
+            },
+            {
+                "id": "yt2", "fmt": "short", "language": "en", "style": "horror", "category": "Horror",
+                "topic": "Midnight Lighthouse", "title": "The Lighthouse Signal From Nowhere",
+                "views": 400, "likes": 12, "avg_view_percentage": 41.0, "ctr": 2.9,
+            },
+        ],
+        "analytics_snapshot": {
+            "traffic_sources": {"SHORTS": 16000, "YT_SEARCH": 2900},
+            "retention_curves": {"yt1": {"points": 100, "first_drop_ratio": 0.72}},
+        },
+    }
+    learnings = growth_engine.analyze_channel_learnings(fake_state)
+    assert learnings["winning_styles"][0] == "animated_myth", f"Expected top style animated_myth, got {learnings['winning_styles']}"
+    assert learnings["optimal_short_duration"] == 36
+    assert learnings["avg_drop_off_ratio"] == 0.72
+
+    # Duplicate upload detection
+    assert upload_youtube.is_duplicate_upload({"title": "The Tiny Squirrel Who Changed History", "language": "en"}, fake_state) is True
+    assert upload_youtube.is_duplicate_upload({"title": "How Black Holes Evaporate Slowly", "language": "en"}, fake_state) is False
+
+    # QC threshold gate
+    blocked, _ = upload_youtube.check_qc_gate({"qc": {"overall_score": 4.2, "passed": False}})
+    allowed, _ = upload_youtube.check_qc_gate({"qc": {"overall_score": 8.4, "passed": True}})
+    assert blocked is False and allowed is True
+    return {"top_style": learnings["winning_styles"][0], "duplicate_guard": True, "qc_gate": True}
+
+
 if __name__ == "__main__":
     print("=====================================================")
     print("        RAPTAR TECHNICAL VERIFICATION SUITE         ")
@@ -528,6 +695,10 @@ if __name__ == "__main__":
     test_raptar_agent_engine()
     test_multilingual_and_animated_agent()
     test_free_ai_video_engine()
+    test_growth_topic_scoring()
+    test_bgm_ducking_and_keywords()
+    test_thumbnails_seo_qc()
+    test_analytics_and_upload_guards()
     
     print("\n=====================================================")
     print("                   TEST SUMMARY                      ")

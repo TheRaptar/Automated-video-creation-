@@ -1,31 +1,32 @@
-# Zerodha trading bot - Phase 1: research & backtesting
+# Zerodha trading bot - research lab (Phase 1)
 
-Tests rules-based end-of-day strategies on liquid NSE stocks, with realistic Zerodha delivery costs
-(STT, stamp duty, exchange fees, GST, DP charges), slippage, protective stops and an out-of-sample check.
-**It places no orders and needs no Zerodha login.**
+Tests rules-based and multi-factor end-of-day strategies on liquid NSE stocks with realistic Zerodha delivery costs,
+slippage, idle-cash yield and an out-of-sample check. **It places no orders and needs no Zerodha login.**
 
-## Run it without installing anything
-1. Put this `trading-bot/` folder in your repo root. Put `.github/workflows/backtest.yml` in the repo's root `.github/workflows/`.
-2. Actions tab -> "Backtest strategy" -> Run workflow -> choose a strategy.
-3. Open the run: the report is in the summary, and charts/CSVs are in the downloadable artifact.
+## Run without installing anything (GitHub Actions)
+Put `trading-bot/` in your repo root and both files from `trading-bot/.github/workflows/` into the repo's ROOT `.github/workflows/`.
+1. **Alpha lab** - which signals carry any information? (factors, liquidity sweeps, supply/demand zones, macro variables)
+2. **Backtest strategy** - pick `multifactor`, `momentum`, `donchian` or `rsi2`; tick *macro* to use India VIX in the market filter.
+Reports appear in the run summary; charts and CSVs are in the downloadable artifact.
 
-Locally: `pip install -r requirements.txt && pytest -q && python run_backtest.py --strategy momentum --data yahoo --robust`
+Locally: `pip install -r requirements.txt && pytest -q && python run_alphalab.py --data yahoo --macro`
 
-## Strategies (deliberately simple)
-- `momentum` - hold the strongest stocks (6-month momentum), re-ranked monthly; goes to cash when the market is below its 200-day average.
-- `donchian` - breakout above the 55-day high, exit below the 20-day low.
-- `rsi2` - buy short-term dips in uptrends (trades a lot, so costs bite hard).
+## What is inside
+| Idea | What exists | Notes |
+|---|---|---|
+| Multi-factor models | `factors.py`, `multifactor.py` | 18 daily-data factors; equal-weight or walk-forward ridge; turnover buffer; hysteresis regime filter |
+| Statistical testing | `alphalab.py` | rank IC, non-overlapping t-stats, in/out-of-sample, after-cost quintiles, false-discovery correction |
+| Institutional-footprint proxies | `factors.py` | money flow, OBV, up/down volume, overnight-vs-intraday returns, VWAP distance, volume surges |
+| Liquidity sweeps, supply/demand zones | `factors.py` event signals + event study | formalised from daily OHLC, causal |
+| Macro top-down | `macro.py`, `macro_study` | India VIX, USDINR, Brent, US 10y |
+| Fundamentals | `fundamentals.py` | bring a point-in-time CSV; reporting lag enforced |
+| VWAP / TWAP / impact model | `execution.py`, `run_execution_demo.py` | cost-optimal slicing maths; sqrt-law impact usable in the backtest (`--slippage-model impact`) |
 
-## How to read a report
-Look at the **out-of-sample** column and the **Reality checks** section first, not the headline CAGR.
-A strategy that only works in-sample, only for one parameter setting, or does not beat buy-and-hold after costs is not a strategy.
+## Not possible with free retail data (deliberately not faked)
+Iceberg/dark-pool detection (India has no dark pools; hidden size is invisible), tick-level order flow and sweeps
+(needs level-2/3 history; start recording it in Phase 2), and HFT (latency, order-rate limits, static-IP rules).
 
-## Known limitations (read these)
-- **Survivorship bias:** the stock list is today's large caps; stocks that fell out of the index are missing, which flatters results.
-- Yahoo data is free but imperfect. For serious validation use Kite Connect historical data (Rs 500/month) exported to CSV (`--data csv:FOLDER`).
-- No taxes in the numbers. No guarantee of future results.
-
-## Next phases
-2. Paper trading: a simulated broker on live data with the same strategy code.
-3. Live with a tiny budget. Needs: an India-hosted server with a static IP registered in Kite Connect (required for API orders), a daily manual login (2FA), hard risk limits and a kill switch.
-4. Scale only after months of profit after costs.
+## How to read results
+Look at out-of-sample numbers, the *Reality checks* list and the equal-weight-universe column first. Known limits:
+survivorship bias (today's large caps), imperfect Yahoo data, taxes excluded, index benchmark is price-only.
+Not investment advice; no result guarantees future profit.

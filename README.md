@@ -21,8 +21,9 @@ RAPTAR is an autonomous AI-operated animated Reels, YouTube Shorts, and Long-For
 |                            PYTHON ANIMATION & VIDEO PIPELINE                            |
 |  - raptar_agent.py     -> Multi-genre persona planner, 11-language dubbing & audit      |
 |  - trends.py           -> Market Research (Google Trends, Wikipedia, YouTube signals)   |
-|  - make_video.py       -> AI Animation (Gemini SVG + Pollinations + 2.5D Ken Burns),   |
-|                           Edge-TTS Neural Voices, libass Subtitles, Multi-Chapter Long  |
+|  - make_video.py       -> Free Real AI Video (Wan 2.2 Lightning I2V, LTX-Video Distilled,  |
+|                           Pollinations Flux + Seamless Boomerang Normalization, Edge-TTS,   |
+|                           libass Multilingual Subtitles, Multi-Chapter Long-Form)           |
 |  - upload_youtube.py   -> YouTube Data API v3 Uploader (primary + language variants)    |
 |  - upload_instagram.py -> Instagram Graph API v23.0 Reels Uploader (primary + dubs)     |
 |  - history.json        -> 300-topic anti-repetition FIFO memory                         |
@@ -43,7 +44,7 @@ RAPTAR is an autonomous AI-operated animated Reels, YouTube Shorts, and Long-For
 │       └── daily.yml                # 7x/day global schedule (animated, short, story, long)
 ├── Automated-video-creation/        # Core Python Production Pipeline
 │   ├── history.json                 # 300-entry topic anti-repetition blacklist
-│   ├── make_video.py                # Video & AI animation assembly engine (FFmpeg, libass)
+│   ├── make_video.py                # Real AI Video & FFmpeg/libass assembly engine
 │   ├── raptar_agent.py              # Multi-language & animated genre autonomous agent
 │   ├── requirements.txt             # Python dependencies
 │   ├── state.json                   # Strategic weights, language index, uploads & trends
@@ -55,7 +56,7 @@ RAPTAR is an autonomous AI-operated animated Reels, YouTube Shorts, and Long-For
 ├── requirements.txt                 # Root Python requirements
 ├── server.ts                        # Headless Express backend & Agent Orchestrator
 └── tests/                           # Technical Verification & Audit Suite
-    ├── verify_raptar.py             # Python engine, FFmpeg, libass, animation & schema tests
+    ├── verify_raptar.py             # Python engine, FFmpeg, libass, AI video & schema tests
     └── test_api.ts                  # REST API & streaming endpoint test suite
 ```
 
@@ -86,7 +87,9 @@ cp .env.example .env
 ```
 
 Key environment variables in `.env`:
-* `GEMINI_API_KEY`: Required for autonomous agent planning, vector SVG animation, scriptwriting, and translation.
+* `GEMINI_API_KEY`: Free-tier key for autonomous agent planning, scriptwriting, and translation.
+* `FREE_VIDEO_PROVIDER`: `auto` (Pollinations Flux -> Wan 2.2 Lightning I2V -> LTX-Video I2V/T2V -> 2.5D Ken Burns fallback) | `i2v` | `t2v` | `kenburns`.
+* `HF_TOKEN`: Optional $0 free Hugging Face read token (`huggingface.co/settings/tokens`) for higher daily ZeroGPU quota and unlocking LTX-2.3 / Wan 2.1 Fast.
 * `PIXABAY_API_KEY` / `PEXELS_API_KEY`: Optional stock footage fallback.
 * `TARGET_LANGUAGE`: `auto` | `en` | `ta` | `hi` | `es` | `fr` | `pt` | `de` | `ja` | `ko` | `ar` | `id`.
 * `DUB_LANGUAGES`: Optional comma-separated extra dubbed variants rendered per run (e.g. `ta,hi,es`).

@@ -1,0 +1,41 @@
+name: Alpha lab (test signal ideas)
+
+# Statistically tests ~18 factors, liquidity-sweep and supply/demand-zone events, and macro variables on real NSE data.
+# Like backtest.yml, this file must live in the repo's ROOT folder  .github/workflows/
+on:
+  workflow_dispatch:
+    inputs:
+      years:
+        description: "Years of history"
+        default: "10"
+      macro:
+        description: "Include macro study (India VIX, USDINR, Brent, US 10y)"
+        type: boolean
+        default: true
+
+defaults:
+  run:
+    working-directory: trading-bot
+
+jobs:
+  lab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Self-tests
+        run: pytest -q
+      - name: Run the alpha lab on real NSE data
+        run: python run_alphalab.py --data yahoo --years ${{ inputs.years }} ${{ inputs.macro && '--macro' || '' }}
+      - name: Show report in the run summary
+        if: always()
+        run: cat reports/alphalab/summary.md >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: alphalab
+          path: trading-bot/reports/

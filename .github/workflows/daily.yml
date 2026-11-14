@@ -138,7 +138,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
-      # 6. Generate the video using Gemini, Edge-TTS, Pollinations/SVG/Stock & FFmpeg
+      # 6. Generate the video using Gemini, Edge-TTS, Free ZeroGPU AI Video (Wan 2.2 / LTX-Video) & FFmpeg
       - name: Generate AI video
         id: generate
         env:
@@ -146,13 +146,17 @@ jobs:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          # Optional free Hugging Face read token (zero billing) for dedicated ZeroGPU daily quota
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
           # Optional YouTube API key for trend research/performance feedback
           YT_API_KEY: ${{ secrets.YT_API_KEY }}
 
-          # Enable trend research & AI animated pipelines
+          # Enable trend research & free AI animated pipelines (Wan 2.2 I2V -> LTX-Video -> Ken Burns)
           TRENDS: "1"
           ANIMATED_MODE: "auto"
+          FREE_VIDEO_PROVIDER: "auto"
+          VIDEO_AI_CLIPS_MAX: "8"
 
           # Video duration settings
           VIDEO_SECONDS: "40-60"

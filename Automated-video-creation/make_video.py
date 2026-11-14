@@ -53,6 +53,10 @@ GROQ_BASE = os.environ.get("GROQ_BASE", "https://api.groq.com/openai/v1")
 TTS_VOICE = os.environ.get("TTS_VOICE", "en-US-GuyNeural")
 REVIEW = os.environ.get("REVIEW_SCRIPT", "1") == "1"
 ANIMATED_MODE = os.environ.get("ANIMATED_MODE", "auto").strip().lower()  # auto | always | never
+HF_TOKEN = (os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN") or "").strip()
+FREE_VIDEO_PROVIDER = os.environ.get("FREE_VIDEO_PROVIDER", "auto").strip().lower()  # auto | i2v | t2v | kenburns
+LOCAL_COMFY_URL = os.environ.get("LOCAL_COMFY_URL", "").strip().rstrip("/")
+VIDEO_AI_CLIPS_MAX = max(0, int(os.environ.get("VIDEO_AI_CLIPS_MAX", "8")))
 
 try:
     from raptar_agent import RaptarAgent, LANGUAGES, ANIMATED_STYLES
@@ -537,6 +541,7 @@ Return ONLY JSON:
     "text": "spoken narration in {lang_meta['name']}",
     "search_terms": ["english visual query 1", "english visual query 2"],
     "image_prompt": "detailed 9:16 animated/cinematic scene prompt in ENGLISH, no text/letters",
+    "motion_prompt": "dynamic character action and smooth camera motion in ENGLISH for 24fps AI video",
     "camera_motion": "zoom_in|zoom_out|pan_left|pan_right|pan_up|dolly_pulse",
     "fx": "cinematic|warm_glow|sparkles|eerie_vignette|vibrant"
   }}]
@@ -627,6 +632,7 @@ Return ONLY JSON:
   "scenes": [{{
     "text": "punchy spoken narration in {lang_meta['name']} (1-2 sentences)",
     "image_prompt": "detailed vertical 9:16 3D/anime visual frame description in ENGLISH, no text/letters",
+    "motion_prompt": "dynamic character action, expressive movement, and smooth camera tracking in ENGLISH",
     "camera_motion": "zoom_in|zoom_out|pan_left|pan_right|pan_up|dolly_pulse",
     "fx": "cinematic|warm_glow|sparkles|eerie_vignette|vibrant",
     "search_terms": ["english fallback query"]
@@ -754,6 +760,7 @@ Return ONLY JSON:
   "text": "spoken narration in {lang_meta['name']} (2-3 vivid sentences, ~30-45 words each)",
   "search_terms": ["english visual query 1", "english visual query 2"],
   "image_prompt": "detailed 16:9 widescreen cinematic/animated scene in ENGLISH, no text/letters",
+  "motion_prompt": "dynamic character action and smooth 24fps cinematic motion in ENGLISH",
   "camera_motion": "zoom_in|zoom_out|pan_left|pan_right|pan_up|dolly_pulse"
 }}]}}
 Rules:
@@ -1230,6 +1237,326 @@ def gen_image(prompt: str, dest: Path, style: str = "", idx: int = 0) -> bool:
     return _gemini_svg_illustration(prompt, dest, style=style, idx=idx)
 
 
+_VIDEO_DEAD: set = set()
+_AI_VIDEO_COUNT: int = 0
+
+
+def _hf_headers() -> dict:
+    h = {"User-Agent": "Mozilla/5.0"}
+    if HF_TOKEN:
+        h["Authorization"] = f"Bearer {HF_TOKEN}"
+    return h
+
+
+def _extract_gradio_media_url(payload, host: str) -> str | None:
+    """Recursively extracts the downloadable MP4 URL or file path from a Gradio SSE completion payload."""
+    if isinstance(payload, str):
+        if payload.startswith("http"):
+            return payload
+        if ".mp4" in payload or "/tmp/gradio" in payload:
+            return f"{host}/gradio_api/file={payload}"
+        return None
+    if isinstance(payload, dict):
+        vid = payload.get("video")
+        if isinstance(vid, dict):
+            url = vid.get("url") or vid.get("path")
+            if isinstance(url, str) and url:
+                return url if url.startswith("http") else f"{host}/gradio_api/file={url}"
+        url = payload.get("url")
+        if isinstance(url, str) and url:
+            return url if url.startswith("http") else f"{host}/gradio_api/file={url}"
+        path = payload.get("path")
+        if isinstance(path, str) and (".mp4" in path or "/tmp/gradio" in path):
+            return path if path.startswith("http") else f"{host}/gradio_api/file={path}"
+        for v in payload.values():
+            found = _extract_gradio_media_url(v, host)
+            if found:
+                return found
+    elif isinstance(payload, list):
+        for item in payload:
+            found = _extract_gradio_media_url(item, host)
+            if found:
+                return found
+    return None
+
+
+def _hf_gradio_upload(host: str, file_path: Path, timeout: int = 45) -> str | None:
+    """Uploads an image frame to a Gradio Space and returns its server file path."""
+    try:
+        mime = "image/png" if file_path.suffix.lower() == ".png" else "image/jpeg"
+        with open(file_path, "rb") as fh:
+            r = requests.post(
+                f"{host}/gradio_api/upload",
+                headers=_hf_headers(),
+                files={"files": (file_path.name, fh, mime)},
+                timeout=timeout,
+            )
+        if r.ok:
+            res = r.json()
+            if isinstance(res, list) and res and isinstance(res[0], str):
+                return res[0]
+    except Exception as e:
+        print(f"  ZeroGPU upload ({host}): {type(e).__name__}")
+    return None
+
+
+def _hf_gradio_call(
+    host: str,
+    endpoint: str,
+    data: list,
+    dest: Path,
+    provider_key: str,
+    timeout: int = 180,
+) -> bool:
+    """Invokes a Hugging Face ZeroGPU Gradio REST+SSE endpoint ($0 cost) and downloads the MP4 clip."""
+    if provider_key in _VIDEO_DEAD:
+        return False
+    ep = endpoint.lstrip("/")
+    headers = _hf_headers()
+    try:
+        r = requests.post(
+            f"{host}/gradio_api/call/{ep}",
+            json={"data": data},
+            headers={**headers, "Content-Type": "application/json"},
+            timeout=30,
+        )
+        if not r.ok:
+            print(f"  {provider_key}: submit HTTP {r.status_code}")
+            if r.status_code in (401, 402, 403, 404, 429):
+                _VIDEO_DEAD.add(provider_key)
+            return False
+        event_id = r.json().get("event_id")
+        if not event_id:
+            return False
+
+        sse_url = f"{host}/gradio_api/call/{ep}/{event_id}"
+        with requests.get(sse_url, headers=headers, stream=True, timeout=timeout) as resp:
+            if not resp.ok:
+                if resp.status_code in (401, 402, 429):
+                    _VIDEO_DEAD.add(provider_key)
+                return False
+            ev = None
+            for raw_line in resp.iter_lines(decode_unicode=True):
+                if not raw_line:
+                    continue
+                line = raw_line.strip()
+                if line.startswith("event:"):
+                    ev = line.split(":", 1)[1].strip()
+                elif line.startswith("data:"):
+                    raw_data = line[5:].strip()
+                    if ev == "complete":
+                        try:
+                            payload = json.loads(raw_data)
+                        except Exception:
+                            payload = raw_data
+                        media_url = _extract_gradio_media_url(payload, host)
+                        if not media_url:
+                            return False
+                        dl = requests.get(media_url, headers=headers, stream=True, timeout=120)
+                        if dl.ok:
+                            with open(dest, "wb") as out_fh:
+                                for chunk in dl.iter_content(1 << 16):
+                                    out_fh.write(chunk)
+                            if _valid_video(dest):
+                                return True
+                        dest.unlink(missing_ok=True)
+                        return False
+                    elif ev == "error":
+                        low = raw_data.lower()
+                        print(f"  {provider_key}: ZeroGPU error ({raw_data[:120]})")
+                        if any(k in low for k in ("quota", "limit", "exceeded", "token", "unauthorized", "null")):
+                            _VIDEO_DEAD.add(provider_key)
+                        return False
+    except Exception as e:
+        print(f"  {provider_key}: {type(e).__name__}: {e}")
+    dest.unlink(missing_ok=True)
+    return False
+
+
+def _build_motion_prompt(sc: dict, style: str = "") -> str:
+    """Combines scene art style, character continuity, and motion cues for real AI video synthesis."""
+    base = (sc.get("motion_prompt") or sc.get("image_prompt") or sc.get("text") or "").strip()
+    art = STORY.get("art_style") or "3D Pixar cinematic animation"
+    chars = STORY.get("characters") or ""
+    prompt = (
+        f"{art}. {chars}. {base}. "
+        f"Fluid 24fps character movement, blinking expressive eyes, natural cloth and atmospheric motion, "
+        f"smooth cinematic camera tracking, zero text, zero watermark."
+    )
+    return re.sub(r"\s+", " ", prompt).strip()[:650]
+
+
+def _wan22_i2v(img_path: Path, motion_prompt: str, dest: Path) -> bool:
+    """Free Wan 2.2 14B 4-step Lightning Image-to-Video via Hugging Face ZeroGPU."""
+    host = "https://saravutw-wan2-2-i2v-lightning-4-8step-custom.hf.space"
+    if "wan2.2-i2v" in _VIDEO_DEAD:
+        return False
+    up = _hf_gradio_upload(host, img_path)
+    if not up:
+        return False
+    fobj = {"path": up, "meta": {"_type": "gradio.FileData"}}
+    neg = "blurry, static, frozen frame, low quality, deformed anatomy, jittery camera, text, watermark, logo"
+    data = [fobj, None, motion_prompt, 4, neg, 3.5, 1, 1, random.randint(1, 999999), True, 5, "UniPCMultistep", 3.0, 16, False, True]
+    return _hf_gradio_call(host, "generate_video", data, dest, "wan2.2-i2v", timeout=180)
+
+
+def _ltx_i2v(img_path: Path, motion_prompt: str, dest: Path) -> bool:
+    """Free Lightricks LTX-Video Distilled Image-to-Video via Hugging Face ZeroGPU."""
+    host = "https://lightricks-ltx-video-distilled.hf.space"
+    if "ltx-i2v" in _VIDEO_DEAD:
+        return False
+    up = _hf_gradio_upload(host, img_path)
+    if not up:
+        return False
+    fobj = {"path": up, "meta": {"_type": "gradio.FileData"}}
+    vh, vw = (768, 512) if H > W else (512, 768)
+    neg = "worst quality, inconsistent motion, blurry, jittery, distorted, static, text, watermark"
+    data = [motion_prompt, neg, fobj, None, vh, vw, "image-to-video", 3.0, 9, random.randint(1, 999999), True, 1, True]
+    return _hf_gradio_call(host, "image_to_video", data, dest, "ltx-i2v", timeout=180)
+
+
+def _ltx_t2v(motion_prompt: str, dest: Path) -> bool:
+    """Free Lightricks LTX-Video Distilled Text-to-Video via Hugging Face ZeroGPU."""
+    host = "https://lightricks-ltx-video-distilled.hf.space"
+    if "ltx-t2v" in _VIDEO_DEAD:
+        return False
+    vh, vw = (768, 512) if H > W else (512, 768)
+    neg = "worst quality, inconsistent motion, blurry, jittery, distorted, static, text, watermark"
+    data = [motion_prompt, neg, None, None, vh, vw, "text-to-video", 3.0, 9, random.randint(1, 999999), True, 1, True]
+    return _hf_gradio_call(host, "text_to_video", data, dest, "ltx-t2v", timeout=180)
+
+
+def _ltx23_video(img_path: Path | None, motion_prompt: str, dest: Path) -> bool:
+    """Free Lightricks LTX-2.3 Image-to-Video / Text-to-Video via Hugging Face ZeroGPU (recommended with HF_TOKEN)."""
+    host = "https://lightricks-ltx-2-3.hf.space"
+    if "ltx-2.3" in _VIDEO_DEAD:
+        return False
+    fobj = None
+    if img_path and img_path.exists():
+        up = _hf_gradio_upload(host, img_path)
+        if up:
+            fobj = {"path": up, "meta": {"_type": "gradio.FileData"}}
+    vh, vw = (1024, 576) if H > W else (576, 1024)
+    data = [fobj, motion_prompt, 3.0, False, random.randint(1, 999999), True, vh, vw]
+    return _hf_gradio_call(host, "generate_video", data, dest, "ltx-2.3", timeout=210)
+
+
+def _wan21_fast_i2v(img_path: Path, motion_prompt: str, dest: Path) -> bool:
+    """Free Wan 2.1 14B 4-step Fast Image-to-Video via Hugging Face ZeroGPU (recommended with HF_TOKEN)."""
+    host = "https://multimodalart-wan2-1-fast.hf.space"
+    if "wan2.1-fast" in _VIDEO_DEAD:
+        return False
+    up = _hf_gradio_upload(host, img_path)
+    if not up:
+        return False
+    fobj = {"path": up, "meta": {"_type": "gradio.FileData"}}
+    vh, vw = (768, 512) if H > W else (512, 768)
+    neg = "static, blurred details, overexposed, worst quality, deformed, text, watermark"
+    data = [fobj, motion_prompt, vh, vw, neg, 3, 1.0, 4, random.randint(1, 999999), True]
+    return _hf_gradio_call(host, "generate_video", data, dest, "wan2.1-fast", timeout=210)
+
+
+def _comfyui_video(img_path: Path | None, motion_prompt: str, dest: Path) -> bool:
+    """Optional self-hosted local GPU ComfyUI endpoint (100% free unlimited local Wan 2.2 / LTX-2 runner)."""
+    if not LOCAL_COMFY_URL or "comfyui" in _VIDEO_DEAD:
+        return False
+    try:
+        r = requests.get(f"{LOCAL_COMFY_URL}/system_stats", timeout=5)
+        if not r.ok:
+            _VIDEO_DEAD.add("comfyui")
+            return False
+    except Exception:
+        _VIDEO_DEAD.add("comfyui")
+        return False
+    return False
+
+
+def _i2v_free(img_path: Path, motion_prompt: str, dest: Path) -> str | None:
+    """Tries tiered zero-cost Image-to-Video AI models with automatic quota failover."""
+    providers = [
+        ("Wan2.2-Lightning-I2V", lambda: _wan22_i2v(img_path, motion_prompt, dest)),
+        ("LTX-Video-I2V", lambda: _ltx_i2v(img_path, motion_prompt, dest)),
+    ]
+    if HF_TOKEN:
+        providers.insert(0, ("LTX-2.3-I2V", lambda: _ltx23_video(img_path, motion_prompt, dest)))
+        providers.append(("Wan2.1-Fast-I2V", lambda: _wan21_fast_i2v(img_path, motion_prompt, dest)))
+    if LOCAL_COMFY_URL:
+        providers.insert(0, ("Local-ComfyUI", lambda: _comfyui_video(img_path, motion_prompt, dest)))
+
+    for name, fn in providers:
+        if fn():
+            print(f"    [AI Video] Generated real temporal clip via {name}")
+            return name
+    return None
+
+
+def _t2v_free(motion_prompt: str, dest: Path) -> str | None:
+    """Tries tiered zero-cost Text-to-Video AI models with automatic quota failover."""
+    providers = [
+        ("LTX-Video-T2V", lambda: _ltx_t2v(motion_prompt, dest)),
+    ]
+    if HF_TOKEN:
+        providers.insert(0, ("LTX-2.3-T2V", lambda: _ltx23_video(None, motion_prompt, dest)))
+    for name, fn in providers:
+        if fn():
+            print(f"    [AI Video] Generated real temporal clip via {name}")
+            return name
+    return None
+
+
+def _fx_filter_chain(fx: str) -> str:
+    if fx == "eerie_vignette":
+        return "eq=contrast=1.12:saturation=0.82,vignette=angle=PI/4"
+    if fx in ("warm_glow", "sparkles", "golden_glow"):
+        return "eq=contrast=1.06:saturation=1.22:brightness=0.02"
+    if fx == "vibrant":
+        return "eq=contrast=1.08:saturation=1.28"
+    return "eq=contrast=1.05:saturation=1.12"
+
+
+def _normalize_ai_video_clip(raw_clip: Path, out: Path, total: float, fx: str = "cinematic") -> None:
+    """Upscale AI video clips smoothly and match scene duration via trim, gentle slow-mo, or seamless boomerang loop."""
+    raw_dur = media_duration(raw_clip)
+    base_vf = (
+        f"scale={W}:{H}:force_original_aspect_ratio=increase:flags=bicubic,"
+        f"crop={W}:{H},{_fx_filter_chain(fx)},fps={FPS},setsar=1"
+    )
+    if raw_dur >= max(0.3, total - 0.05):
+        run([
+            "ffmpeg", "-y", "-i", str(raw_clip), "-t", f"{total:.3f}",
+            "-vf", base_vf, "-an", "-r", str(FPS), "-vsync", "cfr", "-video_track_timescale", "90000",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "19", "-pix_fmt", "yuv420p", str(out),
+        ])
+        return
+
+    if total <= raw_dur * 1.45:
+        ratio = total / max(0.3, raw_dur)
+        run([
+            "ffmpeg", "-y", "-i", str(raw_clip), "-t", f"{total:.3f}",
+            "-vf", f"{base_vf},setpts={ratio:.5f}*PTS",
+            "-an", "-r", str(FPS), "-vsync", "cfr", "-video_track_timescale", "90000",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "19", "-pix_fmt", "yuv420p", str(out),
+        ])
+        return
+
+    # Seamless forward+reverse boomerang cycle so longer scenes never suffer hard jump-cut loops
+    boom = raw_clip.with_suffix(".boom.mp4")
+    try:
+        run([
+            "ffmpeg", "-y", "-i", str(raw_clip),
+            "-filter_complex", f"[0:v]{base_vf}[f];[f]split[f1][f2];[f2]reverse[rev];[f1][rev]concat=n=2:v=1:a=0[v]",
+            "-map", "[v]", "-an", "-r", str(FPS), "-vsync", "cfr", "-video_track_timescale", "90000",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "19", "-pix_fmt", "yuv420p", str(boom),
+        ])
+        run([
+            "ffmpeg", "-y", "-stream_loop", "-1", "-i", str(boom), "-t", f"{total:.3f}",
+            "-an", "-r", str(FPS), "-vsync", "cfr", "-video_track_timescale", "90000",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "19", "-pix_fmt", "yuv420p", str(out),
+        ])
+    finally:
+        boom.unlink(missing_ok=True)
+
+
 def _animate_frame_to_video(img: Path, out: Path, total: float, motion: str = "zoom_in", fx: str = "cinematic") -> None:
     """Transforms a keyframe into smooth 30fps animated motion with camera choreography and atmospheric FX."""
     frames = max(2, int(total * FPS) + 2)
@@ -1247,22 +1574,10 @@ def _animate_frame_to_video(img: Path, out: Path, total: float, motion: str = "z
     }
     z, x, y = motion_map.get(motion, motion_map["zoom_in"])
 
-    fx_chain = []
-    if fx == "eerie_vignette":
-        fx_chain.append("eq=contrast=1.12:saturation=0.82,vignette=angle=PI/4")
-    elif fx in ("warm_glow", "sparkles"):
-        fx_chain.append("eq=contrast=1.06:saturation=1.22:brightness=0.02")
-    elif fx == "vibrant":
-        fx_chain.append("eq=contrast=1.08:saturation=1.28")
-    else:
-        fx_chain.append("eq=contrast=1.05:saturation=1.12")
-
     vf = (
         f"scale={big_w}:{big_h}:force_original_aspect_ratio=increase,crop={big_w}:{big_h},"
         f"zoompan=z='{z}':x='{x}':y='{y}':d={frames}:s={zp_w}x{zp_h}:fps={FPS},"
-        f"scale={W}:{H}:flags=bicubic,"
-        + ",".join(fx_chain)
-        + ",setsar=1"
+        f"scale={W}:{H}:flags=bicubic,{_fx_filter_chain(fx)},setsar=1"
     )
     run([
         "ffmpeg", "-y", "-i", str(img), "-vf", vf,
@@ -1272,7 +1587,8 @@ def _animate_frame_to_video(img: Path, out: Path, total: float, motion: str = "z
 
 
 def make_animated_visual(idx: int, sc: dict, total: float, style: str = "") -> Path | None:
-    """Multi-shot AI animated visual generator with Gemini SVG + Pollinations + dynamic 2.5D motion."""
+    """Real AI video generator (Wan 2.2 Lightning I2V, LTX-Video I2V/T2V) with multi-shot Ken Burns & SVG fallback."""
+    global _AI_VIDEO_COUNT
     base_prompt = sc.get("image_prompt") or sc.get("text", "")
     full_prompt = (
         f"{STORY['art_style']}. {STORY['characters']}. Scene: {base_prompt}. "
@@ -1280,16 +1596,43 @@ def make_animated_visual(idx: int, sc: dict, total: float, style: str = "") -> P
     )
     motion = sc.get("camera_motion") or ("zoom_in", "zoom_out", "pan_right", "pan_left", "pan_up")[idx % 5]
     fx = sc.get("fx") or ("eerie_vignette" if style == "horror" else ("warm_glow" if "myth" in style else "vibrant"))
+    out = WORK / f"story_{idx}.mp4"
 
-    # Multi-shot animation for scenes > 6.5s: render 2 complementary shots for dynamic visual flow
+    # 1. Live Real AI Video Generation (Image-to-Video for character consistency -> Text-to-Video backup)
+    pre_keyframe: Path | None = None
+    if not OFFLINE and FREE_VIDEO_PROVIDER != "kenburns" and _AI_VIDEO_COUNT < VIDEO_AI_CLIPS_MAX:
+        motion_prompt = _build_motion_prompt(sc, style=style)
+        raw_ai = WORK / f"ai_raw_{idx}.mp4"
+        if FREE_VIDEO_PROVIDER in ("auto", "i2v"):
+            kf = WORK / f"kf_{idx}.png"
+            if gen_image(full_prompt, kf, style=style, idx=idx):
+                pre_keyframe = kf
+                if _i2v_free(kf, motion_prompt, raw_ai):
+                    _AI_VIDEO_COUNT += 1
+                    _normalize_ai_video_clip(raw_ai, out, total, fx=fx)
+                    raw_ai.unlink(missing_ok=True)
+                    kf.unlink(missing_ok=True)
+                    return out
+        if FREE_VIDEO_PROVIDER in ("auto", "t2v"):
+            if _t2v_free(motion_prompt, raw_ai):
+                _AI_VIDEO_COUNT += 1
+                _normalize_ai_video_clip(raw_ai, out, total, fx=fx)
+                raw_ai.unlink(missing_ok=True)
+                if pre_keyframe:
+                    pre_keyframe.unlink(missing_ok=True)
+                return out
+        raw_ai.unlink(missing_ok=True)
+
+    # 2. Multi-shot Ken Burns animation for scenes >= 6.5s (reusing pre_keyframe if already generated)
     if total >= 6.5 and not OFFLINE:
         half1 = total * 0.5
         half2 = total - half1
-        img1, img2 = WORK / f"img_{idx}_a.png", WORK / f"img_{idx}_b.png"
+        img1 = pre_keyframe if (pre_keyframe and pre_keyframe.exists()) else WORK / f"img_{idx}_a.png"
+        img2 = WORK / f"img_{idx}_b.png"
         shot1, shot2 = WORK / f"anim_{idx}_a.mp4", WORK / f"anim_{idx}_b.mp4"
         alt_motion = "dolly_pulse" if motion != "dolly_pulse" else "zoom_out"
 
-        ok1 = gen_image(full_prompt + ", establishing wide angle", img1, style=style, idx=idx * 2)
+        ok1 = img1.exists() and _valid_image(img1) or gen_image(full_prompt + ", establishing wide angle", img1, style=style, idx=idx * 2)
         ok2 = gen_image(full_prompt + ", expressive cinematic close-up reaction", img2, style=style, idx=idx * 2 + 1)
         if ok1 and ok2:
             _animate_frame_to_video(img1, shot1, half1, motion=motion, fx=fx)
@@ -1298,16 +1641,16 @@ def make_animated_visual(idx: int, sc: dict, total: float, style: str = "") -> P
             img2.unlink(missing_ok=True)
             lst = WORK / f"anim_segs_{idx}.txt"
             lst.write_text(f"file '{shot1.name}'\nfile '{shot2.name}'\n", encoding="utf-8")
-            out = WORK / f"story_{idx}.mp4"
             run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(lst), "-c", "copy", str(out)])
             shot1.unlink(missing_ok=True)
             shot2.unlink(missing_ok=True)
             return out
 
-    img = WORK / f"img_{idx}.png"
-    if not gen_image(full_prompt, img, style=style, idx=idx):
-        return None
-    out = WORK / f"story_{idx}.mp4"
+    # 3. Single-shot Keyframe / SVG 2.5D Ken Burns guaranteed fallback
+    img = pre_keyframe if (pre_keyframe and pre_keyframe.exists()) else WORK / f"img_{idx}.png"
+    if not (img.exists() and _valid_image(img)):
+        if not gen_image(full_prompt, img, style=style, idx=idx):
+            return None
     _animate_frame_to_video(img, out, total, motion=motion, fx=fx)
     img.unlink(missing_ok=True)
     return out
@@ -1514,6 +1857,8 @@ def main() -> None:
     args = ap.parse_args()
     fmt, topic = args.format, " ".join(args.topic).strip() or None
     configure(fmt)
+    global _AI_VIDEO_COUNT
+    _AI_VIDEO_COUNT = 0
 
     if not OFFLINE and not (GEMINI_API_KEY or GROQ_API_KEY):
         sys.exit("Missing GEMINI_API_KEY (and/or GROQ_API_KEY).")
@@ -1619,7 +1964,8 @@ def main() -> None:
         "format": fmt, "language": primary_lang, "topic": script["topic"], "title": script["title"],
         "description": desc, "hashtags": script["hashtags"],
         "category": script.get("category"), "style": script.get("style"),
-        "animated": use_animation, "source": "trend" if idea else "category",
+        "animated": use_animation, "ai_video_clips": _AI_VIDEO_COUNT,
+        "source": "trend" if idea else "category",
     }
     (OUT / "metadata.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
 
@@ -1645,7 +1991,7 @@ def main() -> None:
         state.pop("_style_hint", None)
         save_state(state)
 
-    print(f"Done! -> {final} ({fmt_ts(media_duration(final))} | lang={primary_lang})")
+    print(f"Done! -> {final} ({fmt_ts(media_duration(final))} | lang={primary_lang} | ai_video_clips={_AI_VIDEO_COUNT})")
 
 
 if __name__ == "__main__":

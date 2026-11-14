@@ -681,14 +681,15 @@ Format: {format_type}
 
 DIRECTOR'S GUIDELINES:
 - Language: Write "title", "description", "hashtags", and every scene's "text" natively, naturally, and expressively in {lang_meta['name']}.
-- Visual Prompts: Write every "image_prompt" and "search_terms" strictly in ENGLISH for optimal AI visual rendering.
+- Visual Prompts: Write every "image_prompt", "motion_prompt", and "search_terms" strictly in ENGLISH for optimal AI visual & video rendering.
 - Character Continuity: Describe the main animated character(s) consistently in every scene's image_prompt.
+- Temporal Motion Prompt: Write "motion_prompt" describing physical action, facial expressions, blinking, cloth/hair/water movement, and smooth camera tracking for AI video models (Wan 2.2 / LTX-Video).
 - Camera Motion: Choose an ideal camera_motion per scene from ["zoom_in", "zoom_out", "pan_left", "pan_right", "pan_up", "dolly_pulse"].
 - Visual FX: Choose fx from ["cinematic", "warm_glow", "sparkles", "eerie_vignette", "vibrant"].
 - Art Style: {profile['art_style']}
 - Tone: {profile['tone']}
 - Exactly {num_scenes} sequential scenes, totaling ~{95 if format_type != 'long' else 850} words of spoken narration.
-- Never ask for text, letters, or watermarks inside "image_prompt".
+- Never ask for text, letters, or watermarks inside "image_prompt" or "motion_prompt".
 
 Return ONLY JSON:
 {{
@@ -709,7 +710,8 @@ Return ONLY JSON:
     {{
       "text": "spoken narration in {lang_meta['name']}",
       "search_terms": ["english visual query 1", "english visual query 2"],
-      "image_prompt": "detailed animated scene description in ENGLISH, no text/letters",
+      "image_prompt": "detailed animated keyframe description in ENGLISH, no text/letters",
+      "motion_prompt": "dynamic character action and smooth camera motion in ENGLISH for 24fps AI video",
       "camera_motion": "zoom_in",
       "fx": "cinematic"
     }}
@@ -738,6 +740,7 @@ Return ONLY JSON:
                             "text": "While mighty warriors carried giant boulders to build the ocean bridge to Lanka, one tiny squirrel carried single grains of sand.",
                             "search_terms": ["tiny squirrel ocean rocks sunset", "epic ancient bridge sea"],
                             "image_prompt": "3D Pixar cinematic animation wide shot of giant heroic monkey warriors lifting massive boulders by a sparkling tropical ocean at sunrise, a tiny cute squirrel carrying grains of sand on the shore",
+                            "motion_prompt": "The tiny 3D squirrel scurries energetically forward holding sand grains as waves crash behind and warriors hoist boulders, smooth dolly tracking shot, 24fps 3D animation",
                             "camera_motion": "zoom_in",
                             "fx": "warm_glow",
                         },
@@ -745,6 +748,7 @@ Return ONLY JSON:
                             "text": "The giant warriors laughed. What difference can a grain of sand possibly make against the roaring sea?",
                             "search_terms": ["cute squirrel tiny paws sand", "ocean waves dramatic sunlight"],
                             "image_prompt": "3D Pixar close-up of tiny determined squirrel with sparkling amber eyes holding golden sand grains in tiny paws while shadows of laughing giants loom behind",
+                            "motion_prompt": "Close-up character animation: the squirrel blinks determinedly, ears twitch, clutching sand against wind-swept sparkling sea spray, gentle push-in",
                             "camera_motion": "pan_up",
                             "fx": "cinematic",
                         },
@@ -752,6 +756,7 @@ Return ONLY JSON:
                             "text": "But Lord Rama gently knelt down. Without your sand between the stones, he smiled, these massive boulders could never lock together.",
                             "search_terms": ["divine golden light blessing forest", "gentle hand tiny animal"],
                             "image_prompt": "3D Pixar magical golden hour scene, serene divine warrior king with warm radiant smile gently kneeling on golden shore, glowing blessing light enveloping the tiny squirrel",
+                            "motion_prompt": "The serene warrior king kneels slowly in golden sunlight extending a gentle hand toward the amazed squirrel, soft golden dust particles drifting",
                             "camera_motion": "dolly_pulse",
                             "fx": "sparkles",
                         },
@@ -759,6 +764,7 @@ Return ONLY JSON:
                             "text": "With three loving strokes of his fingers, he blessed the squirrel—leaving the three stripes squirrels still wear today.",
                             "search_terms": ["squirrel three stripes golden light", "magical forest sunlight"],
                             "image_prompt": "3D Pixar magical close-up of glowing golden light trails forming three shimmering stripes across the tiny squirrel's back, awe and joy in its eyes, radiant particles floating",
+                            "motion_prompt": "Golden ethereal light ribbons sweep smoothly across the squirrel's back revealing three luminous stripes as its eyes widen with joyful wonder",
                             "camera_motion": "zoom_out",
                             "fx": "sparkles",
                         },
@@ -766,6 +772,7 @@ Return ONLY JSON:
                             "text": lang_meta["cta"],
                             "search_terms": ["epic sunlit ocean bridge rainbow", "inspiring sunrise sky"],
                             "image_prompt": "3D Pixar breathtaking wide shot of the finished grand stone bridge stretching across gleaming turquoise ocean under a golden sunrise, tiny squirrel standing proudly on a stone",
+                            "motion_prompt": "Sweeping crane pull-back revealing the majestic stone bridge over sparkling ocean waves while the proud little squirrel raises its fluffy tail toward the dawn sky",
                             "camera_motion": "zoom_out",
                             "fx": "warm_glow",
                         },
@@ -788,6 +795,7 @@ Return ONLY JSON:
                             "text": "When the richest lion in the universe lands his golden helicopter, everyone expects a billion-dollar deal.",
                             "search_terms": ["colorful cartoon helicopter landing", "3d animated lion sunglasses"],
                             "image_prompt": "Vibrant 3D Pixar cartoon animation of a shiny golden helicopter landing in a sunny colorful South Indian town square, cool anthropomorphic lion wearing oversized gold sunglasses stepping out",
+                            "motion_prompt": "Rotor blades spin fast kicking up playful dust as the confident 3D cartoon lion adjusts gold sunglasses and swaggers down the steps",
                             "camera_motion": "zoom_in",
                             "fx": "vibrant",
                         },
@@ -795,6 +803,7 @@ Return ONLY JSON:
                             "text": "Instead, young Bheem walks straight up past the bodyguards with total confidence.",
                             "search_terms": ["cheerful animated boy walking", "sunny colorful town cartoon"],
                             "image_prompt": "3D Pixar cartoon close-up of a cheerful playful boy with messy hair and bright red jacket strutting fearlessly past giant funny animated hippo bodyguards",
+                            "motion_prompt": "The cheerful animated boy marches briskly forward swinging his arms past startled oversized hippo guards, dynamic tracking shot",
                             "camera_motion": "pan_right",
                             "fx": "vibrant",
                         },
@@ -802,6 +811,7 @@ Return ONLY JSON:
                             "text": "All Bheem wants is one tiny milk packet for his morning filter coffee! The lion freezes in disbelief.",
                             "search_terms": ["funny surprised cartoon lion", "animated friends laughing"],
                             "image_prompt": "3D Pixar hilarious exaggerated reaction shot, rich cartoon lion dropping his jaw and sliding gold sunglasses down his nose in shock while the boy holds up one cheerful finger",
+                            "motion_prompt": "Cartoon comedy reaction: the lion's sunglasses slip slowly down his snout with wide blinking eyes while the kid grins cheerfully",
                             "camera_motion": "dolly_pulse",
                             "fx": "sparkles",
                         },
@@ -809,6 +819,7 @@ Return ONLY JSON:
                             "text": "And that's how the most unlikely legendary friendship began over a simple cup of morning chai.",
                             "search_terms": ["cartoon lion and boy cheering", "sunny friendship sunset"],
                             "image_prompt": "3D Pixar heartwarming comedic wide shot of the rich lion and the cheerful boy clinking hot tea glasses together on a colorful rooftop overlooking lush green hills",
+                            "motion_prompt": "Steaming chai glasses clink joyfully with splashing ripples as the lion and boy laugh together in warm golden sunlight",
                             "camera_motion": "zoom_out",
                             "fx": "warm_glow",
                         },
@@ -831,6 +842,7 @@ Return ONLY JSON:
                             "text": "High above the glowing night skyline, an unexpected discovery changed everything in a single heartbeat.",
                             "search_terms": ["cinematic starry night city", "animated glowing lantern"],
                             "image_prompt": f"{profile['art_style']}, opening dramatic wide shot of shimmering night horizon, mystery glowing object floating",
+                            "motion_prompt": "Sweeping aerial camera glides past glowing clouds toward a levitating luminous orb pulsing in twilight, smooth cinematic animation",
                             "camera_motion": "zoom_in",
                             "fx": "cinematic",
                         },
@@ -838,6 +850,7 @@ Return ONLY JSON:
                             "text": "Every clue pointed to a secret hidden for generations beneath the ancient archway.",
                             "search_terms": ["ancient mysterious doorway light", "magical forest glow"],
                             "image_prompt": f"{profile['art_style']}, mysterious ancient stone doorway opening with radiant beam of emerald light",
+                            "motion_prompt": "Heavy carved stone doors part slowly revealing dazzling emerald mist and drifting golden dust motes",
                             "camera_motion": "pan_up",
                             "fx": "sparkles",
                         },
@@ -845,6 +858,7 @@ Return ONLY JSON:
                             "text": "Stepping forward took courage, because once the portal opened, there was no turning back.",
                             "search_terms": ["hero stepping into light portal", "dramatic silhouette sunset"],
                             "image_prompt": f"{profile['art_style']}, heroic silhouette standing at the threshold of a swirling luminous energy portal, floating embers",
+                            "motion_prompt": "Hero steps forward with billowing cloak as swirling portal energy orbits around in slow-motion glow",
                             "camera_motion": "dolly_pulse",
                             "fx": "warm_glow",
                         },
@@ -852,6 +866,7 @@ Return ONLY JSON:
                             "text": lang_meta["cta"],
                             "search_terms": ["inspiring sunrise mountain landscape", "starry night sky glow"],
                             "image_prompt": f"{profile['art_style']}, breathtaking cosmic sunrise over tranquil mountain peaks, hopeful glowing horizon",
+                            "motion_prompt": "Radiant golden sunbeams bloom across drifting sea of clouds over mountain peaks in serene wide shot",
                             "camera_motion": "zoom_out",
                             "fx": "cinematic",
                         },

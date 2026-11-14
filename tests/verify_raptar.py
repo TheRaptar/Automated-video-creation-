@@ -463,11 +463,50 @@ def test_multilingual_and_animated_agent():
     script = agent.plan_script(topic_info, format_type="animated", lang="ta")
     assert len(script.get("scenes", [])) >= 4, "Animated script should plan at least 4 scenes"
     assert "camera_motion" in script["scenes"][0], "Animated scene missing camera_motion"
+    assert "motion_prompt" in script["scenes"][0], "Animated scene missing temporal motion_prompt"
 
     # Translate offline fallback should safely preserve scene count
     dubbed = agent.translate_script(script, "hi")
     assert dubbed["language"] == "hi" and len(dubbed["scenes"]) == len(script["scenes"])
     return {"languages": len(LANGUAGES), "animated_style": topic_info["style"], "scenes": len(script["scenes"])}
+
+
+@test("1.7 Free AI Video Engine (Gradio SSE Parser, Motion Prompt & Boomerang Clip Normalization)")
+def test_free_ai_video_engine():
+    import make_video
+    import shutil
+    make_video.configure("animated")
+    test_work = SCRIPT_DIR / "test_aivid_work"
+    test_work.mkdir(exist_ok=True)
+    try:
+        host = "https://saravutw-wan2-2-i2v-lightning-4-8step-custom.hf.space"
+        # 1. Verify nested Gradio video payload extraction (both Wan2.2 and LTX formats)
+        u1 = make_video._extract_gradio_media_url([{"video": {"url": f"{host}/gradio_api/file=/tmp/gradio/abc/clip.mp4"}}], host)
+        assert u1 and u1.endswith("clip.mp4"), f"Failed LTX format extraction: {u1}"
+        u2 = make_video._extract_gradio_media_url([{"path": "/tmp/gradio/xyz/wan.mp4"}], host)
+        assert u2 == f"{host}/gradio_api/file=/tmp/gradio/xyz/wan.mp4", f"Failed Wan2.2 path extraction: {u2}"
+
+        # 2. Verify motion prompt builder includes art style & temporal hints
+        make_video.STORY.update(art_style="3D Pixar animation", characters="Tiny squirrel")
+        mp = make_video._build_motion_prompt({"motion_prompt": "Squirrel scurries across golden beach"})
+        assert "3D Pixar animation" in mp and "Squirrel scurries" in mp and "24fps" in mp
+
+        # 3. Verify _normalize_ai_video_clip handles short 1.2s clip -> 4.0s seamless boomerang upscale
+        raw = test_work / "raw_1s.mp4"
+        out = test_work / "norm_4s.mp4"
+        make_video.run([
+            "ffmpeg", "-y", "-f", "lavfi",
+            "-i", "gradients=s=560x832:c0=0x112233:c1=0xaa5522:duration=1.2:rate=16",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", str(raw),
+        ])
+        make_video._normalize_ai_video_clip(raw, out, 4.0, fx="warm_glow")
+        assert make_video._valid_video(out), "Normalized boomerang AI video failed validation"
+        dur = make_video.media_duration(out)
+        assert 3.8 <= dur <= 4.2, f"Expected ~4.0s boomerang normalized clip, got {dur}s"
+        return {"extracted_formats": 2, "normalized_dur": round(dur, 2)}
+    finally:
+        shutil.rmtree(test_work, ignore_errors=True)
+
 
 if __name__ == "__main__":
     print("=====================================================")
@@ -488,6 +527,7 @@ if __name__ == "__main__":
     test_performance_weights()
     test_raptar_agent_engine()
     test_multilingual_and_animated_agent()
+    test_free_ai_video_engine()
     
     print("\n=====================================================")
     print("                   TEST SUMMARY                      ")

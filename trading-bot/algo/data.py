@@ -20,6 +20,7 @@ class Panel:
     close: pd.DataFrame
     volume: pd.DataFrame
     benchmark: pd.Series
+    macro: pd.DataFrame | None = None   # optional: vix, usdinr, brent, us10y
 
     @property
     def dates(self):
@@ -31,14 +32,16 @@ class Panel:
 
     def slice(self, start=None, end=None) -> "Panel":
         sl = slice(start, end)
-        return Panel(*(getattr(self, c).loc[sl] for c in COLS), benchmark=self.benchmark.loc[sl])
+        return Panel(*(getattr(self, c).loc[sl] for c in COLS), benchmark=self.benchmark.loc[sl],
+                     macro=None if self.macro is None else self.macro.loc[sl])
 
 
 def equal_weight_index(close: pd.DataFrame) -> pd.Series:
     return close.pct_change().mean(axis=1).fillna(0.0).add(1).cumprod() * 100
 
 
-def build_panel(frames: dict, benchmark: pd.Series | None = None, min_rows: int = 260) -> Panel:
+def build_panel(frames: dict, benchmark: pd.Series | None = None, min_rows: int = 260,
+                macro: pd.DataFrame | None = None) -> Panel:
     frames = {s: f for s, f in frames.items() if f is not None and len(f) >= min_rows}
     if not frames:
         raise ValueError("No usable price history (need at least %d rows per symbol)." % min_rows)
@@ -51,7 +54,9 @@ def build_panel(frames: dict, benchmark: pd.Series | None = None, min_rows: int 
         bench = equal_weight_index(close)
     else:
         bench = benchmark.reindex(close.index).ffill().bfill()
-    return Panel(cols["open"], cols["high"], cols["low"], close, cols["volume"], bench)
+    if macro is not None:
+        macro = macro.reindex(close.index).ffill()
+    return Panel(cols["open"], cols["high"], cols["low"], close, cols["volume"], bench, macro)
 
 
 def _clean(df: pd.DataFrame) -> pd.DataFrame:
@@ -108,7 +113,7 @@ def download_yahoo(symbols, start, end=None, cache_dir="data_cache", benchmark="
     return build_panel(frames, None if bench is None else bench["close"])
 
 
-def synthetic_panel(n_symbols=30, years=8, seed=0) -> Panel:
+def synthetic_panel(n_symbols=30, years=8, seed=0, persistent=True) -> Panel:
     """Random but realistic-looking prices with a market factor and slowly drifting stock trends."""
     rng = np.random.default_rng(seed)
     dates = pd.bdate_range("2016-01-01", periods=int(252 * years))
@@ -120,7 +125,7 @@ def synthetic_panel(n_symbols=30, years=8, seed=0) -> Panel:
         d = rng.normal(0.0002, 0.0004)
         for t in range(n):                       # persistent (momentum-like) drift
             d = 0.985 * d + rng.normal(0, 0.00012)
-            drift[t] = d
+            drift[t] = d if persistent else 0.0002   # persistent=False -> pure noise, nothing to find
         r = drift + rng.uniform(0.6, 1.3) * market + rng.normal(0, 0.012, n)
         close = 100 * np.exp(np.cumsum(r))
         prev = np.r_[close[0], close[:-1]]
@@ -130,4 +135,8 @@ def synthetic_panel(n_symbols=30, years=8, seed=0) -> Panel:
         vol = rng.lognormal(np.log(3e6), 0.3, n)    # ~Rs 30 crore a day: liquid
         frames[f"SYN{k:02d}"] = pd.DataFrame(
             {"open": open_, "high": high, "low": low, "close": close, "volume": vol}, index=dates)
-    return build_panel(frames, None)
+    vix = pd.Series(16 + np.cumsum(rng.normal(0, 0.4, n)) * 0.2 + 3 * np.abs(market) * 100, index=dates).clip(9, 80)
+    macro = pd.DataFrame({"vix": vix, "usdinr": 70 * np.exp(np.cumsum(rng.normal(0.0001, 0.003, n))),
+                          "brent": 60 * np.exp(np.cumsum(rng.normal(0, 0.02, n))),
+                          "us10y": 2 + np.cumsum(rng.normal(0, 0.03, n)) * 0.2}, index=dates)
+    return build_panel(frames, None, macro=macro)

@@ -121,11 +121,55 @@ class RSI2Pullback(Strategy):
         return Signals(desired, -r)
 
 
-STRATEGIES = {"momentum": TrendMomentum, "donchian": Donchian, "rsi2": RSI2Pullback}
+@dataclass
+class MultiFactor(Strategy):
+    """Rank stocks by a multi-factor score; rebalance every `rebalance_days`; keep current holdings while they stay
+    within `buffer` x top_n (cuts turnover). No stop-loss: a factor portfolio is diversified by construction.
+    Factors are chosen from the literature BEFORE looking at results (do not cherry-pick them from the lab)."""
+    top_n: int = 15
+    buffer: float = 1.5
+    rebalance_days: int = 21
+    model: str = "equal"          # "equal" or "ridge"
+    regime: str = "trend"         # "none", "trend" (index above 200d) or "macro" (trend + India VIX calm)
+    factors: tuple = ("mom_12_1", "high52", "lowvol_60", "rev_21d")
+    name = "multifactor"
+    stop_atr_mult = None
+    trailing_stop = False
+
+    def signals(self, p):
+        from .factors import compute_factors
+        from .macro import risk_on
+        from .multifactor import composite, ridge_scores
+        f = compute_factors(p, list(self.factors))
+        score = ridge_scores(f, list(self.factors), p) if self.model == "ridge" else composite(f, list(self.factors))
+        S = score.to_numpy(float)
+        T, N = S.shape
+        desired = np.zeros((T, N), bool)
+        held: set = set()
+        starts = [i for i in range(0, T, self.rebalance_days) if np.isfinite(S[i]).sum() >= self.top_n]
+        for k, i in enumerate(starts):
+            valid = np.flatnonzero(np.isfinite(S[i]))
+            order = valid[np.argsort(-S[i, valid], kind="stable")]
+            rank = {j: r for r, j in enumerate(order)}
+            keep = [j for j in held if j in rank and rank[j] < self.buffer * self.top_n]
+            new = keep + [j for j in order if j not in keep][: self.top_n - len(keep)]
+            held = set(new[: self.top_n])
+            end = starts[k + 1] if k + 1 < len(starts) else T
+            desired[i:end, list(held)] = True
+        df = pd.DataFrame(desired, index=score.index, columns=score.columns)
+        if self.regime == "trend":
+            df = _gate(df, risk_on(None, p.benchmark))
+        elif self.regime == "macro":
+            df = _gate(df, risk_on(p.macro, p.benchmark))
+        return Signals(df, score)
+
+
+STRATEGIES = {"momentum": TrendMomentum, "donchian": Donchian, "rsi2": RSI2Pullback, "multifactor": MultiFactor}
 
 # Small grids for the robustness check (does the idea work across settings, or only for one lucky setting?)
 GRIDS = {
     "momentum": {"top_n": [5, 10, 15], "lookback": [63, 126, 189], "ma": [100, 200]},
     "donchian": {"entry": [20, 55, 100], "exit_n": [10, 20, 40]},
     "rsi2": {"entry_thr": [5, 10, 15], "exit_thr": [60, 70, 80]},
+    "multifactor": {"top_n": [10, 15, 20], "buffer": [1.0, 1.5, 2.0], "rebalance_days": [21, 42]},
 }

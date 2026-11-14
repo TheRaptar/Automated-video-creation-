@@ -15,6 +15,7 @@ import pandas as pd
 
 from .costs import DeliveryCosts
 from .data import Panel
+from .execution import impact_bps
 from .indicators import atr as atr_fn
 from .strategies import Strategy
 
@@ -31,6 +32,10 @@ class Config:
     min_adv: float = 5e7                  # skip stocks trading < Rs 5 crore/day (20-day average)
     max_adv_pct: float = 0.05             # never buy more than 5% of a day's traded value
     cash_buffer: float = 0.02             # keep 2% of equity as cash
+    cash_yield: float = 0.0               # annual yield on idle cash (liquid fund ~6%); CLI default 6%
+    slippage_model: str = "flat"          # "flat" (slippage_bps) or "impact" (spread + sqrt-law market impact)
+    impact_coeff: float = 0.8
+    half_spread_bps: float = 3.0
     costs: DeliveryCosts = field(default_factory=DeliveryCosts)
 
 
@@ -46,6 +51,7 @@ class Result:
     open_positions: pd.DataFrame
     total_costs: float
     min_cash: float
+    interest: float = 0.0
 
 
 def run_backtest(panel: Panel, strategy: Strategy, cfg: Config | None = None) -> Result:
@@ -66,6 +72,18 @@ def run_backtest(panel: Panel, strategy: Strategy, cfg: Config | None = None) ->
                   panel.low.to_numpy(dtype=float), panel.close.to_numpy(dtype=float))
     Cff = panel.close.ffill().to_numpy(dtype=float)
     slip = cfg.slippage_bps / 1e4
+    sigma = panel.close.pct_change().rolling(20, min_periods=20).std().to_numpy(dtype=float)
+    daily_y = (1 + cfg.cash_yield) ** (1 / 252) - 1 if cfg.cash_yield else 0.0
+    total_interest = 0.0
+
+    def slip_for(j: int, i: int, value: float) -> float:
+        """Fractional slippage for an order of `value` rupees, using only yesterday's volume/volatility."""
+        if cfg.slippage_model != "impact" or i == 0:
+            return slip
+        a, s = adv[i - 1, j], sigma[i - 1, j]
+        if not (np.isfinite(a) and np.isfinite(s) and a > 0):
+            return slip
+        return impact_bps(value, a, s, cfg.impact_coeff, cfg.half_spread_bps) / 1e4
 
     cash, total_costs, min_cash = cfg.capital, 0.0, cfg.capital
     pos: dict[int, dict] = {}
@@ -77,7 +95,7 @@ def run_backtest(panel: Panel, strategy: Strategy, cfg: Config | None = None) ->
     def sell(j: int, raw_price: float, i: int, reason: str):
         nonlocal cash, total_costs
         p = pos.pop(j)
-        fill = raw_price * (1 - slip)
+        fill = raw_price * (1 - slip_for(j, i, p["shares"] * raw_price))
         value = p["shares"] * fill
         ch = cfg.costs.charges("SELL", value)
         cash += value - ch
@@ -92,6 +110,10 @@ def run_backtest(panel: Panel, strategy: Strategy, cfg: Config | None = None) ->
 
     for i in range(n_days):
         o, l, c = O[i], L[i], C[i]
+        if daily_y:
+            interest = cash * daily_y
+            cash += interest
+            total_interest += interest
 
         # (1) sells at the open
         for j, reason in pending_sell:
@@ -107,7 +129,7 @@ def run_backtest(panel: Panel, strategy: Strategy, cfg: Config | None = None) ->
             for j, atr_sig, adv_sig in pending_buy:
                 if j in pos or len(pos) >= cfg.max_positions or not np.isfinite(o[j]):
                     continue
-                fill = o[j] * (1 + slip)
+                fill = o[j] * (1 + slip_for(j, i, target))
                 budget = min(target, cash - cfg.cash_buffer * equity_open,
                              adv_sig * cfg.max_adv_pct if np.isfinite(adv_sig) else np.inf)
                 shares = int(budget / (fill * 1.0015)) if budget > 0 else 0   # 0.15% headroom for charges
@@ -167,4 +189,4 @@ def run_backtest(panel: Panel, strategy: Strategy, cfg: Config | None = None) ->
     return Result(strategy.name, strategy.params(), cfg,
                   pd.Series(equity, index=dates, name="equity"), pd.Series(exposure, index=dates),
                   pd.Series(npos, index=dates), pd.DataFrame(trades), pd.DataFrame(open_rows),
-                  total_costs, min_cash)
+                  total_costs, min_cash, interest=total_interest)

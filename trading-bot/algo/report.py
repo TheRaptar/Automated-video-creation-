@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from .data import equal_weight_index
 from .metrics import performance, trade_stats, yearly_returns
 
 
@@ -25,6 +26,9 @@ def write_report(out, res, panel, cut, rf, robust_df, data_label, universe_n):
     bench = (panel.benchmark.reindex(res.equity.index).ffill() / panel.benchmark.dropna().iloc[0]) * cap
     bench = bench / bench.iloc[0] * cap
     full, bfull = performance(res.equity, rf), performance(bench, rf)
+    ew_idx = equal_weight_index(panel.close).reindex(res.equity.index).ffill()
+    ew = ew_idx / ew_idx.iloc[0] * cap
+    efull = performance(ew, rf)
     i_eq, o_eq = res.equity.loc[:cut], res.equity.loc[cut:]
     i_p, o_p = performance(i_eq, rf), performance(o_eq, rf)
     b_o = performance(bench.loc[cut:], rf)
@@ -33,7 +37,8 @@ def write_report(out, res, panel, cut, rf, robust_df, data_label, universe_n):
     # ---- charts
     fig, ax = plt.subplots(2, 1, figsize=(11, 8), sharex=True, gridspec_kw={"height_ratios": [3, 1]})
     ax[0].plot(res.equity.index, res.equity / cap, label=f"{res.strategy} (after costs)", lw=1.6)
-    ax[0].plot(bench.index, bench / cap, label="Benchmark buy & hold", lw=1.2, alpha=.8)
+    ax[0].plot(bench.index, bench / cap, label="Index buy & hold (price only)", lw=1.2, alpha=.8)
+    ax[0].plot(ew.index, ew / cap, label="Equal-weight universe buy & hold", lw=1.0, alpha=.7, ls=":")
     ax[0].axvline(cut, color="grey", ls="--", lw=1); ax[0].text(cut, ax[0].get_ylim()[1] * .95, " out-of-sample ->", color="grey")
     ax[0].set_yscale("log"); ax[0].set_ylabel("Growth of 1 (log)"); ax[0].legend(); ax[0].grid(alpha=.3)
     dd = res.equity / res.equity.cummax() - 1
@@ -43,7 +48,7 @@ def write_report(out, res, panel, cut, rf, robust_df, data_label, universe_n):
     res.trades.to_csv(out / "trades.csv", index=False)
     res.open_positions.to_csv(out / "open_positions.csv", index=False)
     (out / "metrics.json").write_text(json.dumps(
-        {"full": full, "in_sample": i_p, "out_of_sample": o_p, "benchmark": bfull, "trades": ts,
+        {"full": full, "in_sample": i_p, "out_of_sample": o_p, "benchmark": bfull, "equal_weight_universe": efull, "trades": ts,
          "total_costs": res.total_costs}, indent=2, default=float), encoding="utf-8")
 
     # ---- reality checks
@@ -66,12 +71,12 @@ def write_report(out, res, panel, cut, rf, robust_df, data_label, universe_n):
         if share < 0.6:
             flags.append(f"Only {share:.0%} of tested settings had a decent out-of-sample Sharpe: the idea is fragile.")
 
-    row = lambda name, k, f: f"| {name} | " + " | ".join(f(d[k]) for d in (full, bfull, i_p, o_p)) + " |"
+    row = lambda name, k, f: f"| {name} | " + " | ".join(f(d[k]) for d in (full, bfull, efull, i_p, o_p)) + " |"
     md = [f"# Backtest report: {res.strategy}", "",
           f"*Data:* {data_label} - {universe_n} stocks, {res.equity.index[0].date()} to {res.equity.index[-1].date()} "
           f"({years:.1f} years). *Capital:* Rs {cap:,.0f}. *Max positions:* {res.config.max_positions}. "
           f"*Params:* `{res.params}`", "",
-          "| Metric | Strategy | Benchmark | Strategy in-sample | Strategy out-of-sample |", "|---|---|---|---|---|",
+          "| Metric | Strategy | Index (price only) | Equal-weight universe | Strategy in-sample | Strategy out-of-sample |", "|---|---|---|---|---|---|",
           row("CAGR", "cagr", _pct), row("Total return", "total_return", _pct), row("Volatility", "volatility", _pct),
           row("Sharpe", "sharpe", _num), row("Sortino", "sortino", _num), row("Max drawdown", "max_drawdown", _pct),
           row("Calmar", "calmar", _num), "",
@@ -80,7 +85,7 @@ def write_report(out, res, panel, cut, rf, robust_df, data_label, universe_n):
           f"avg holding {_num(ts.get('avg_days_held'), 0)} days, {ts.get('stop_exits', 0)} stop-outs.  ",
           f"**Costs paid:** Rs {res.total_costs:,.0f} ({res.total_costs / cap / years * 100:.2f}% of capital per year) - "
           f"STT, stamp duty, exchange fees, GST, DP charges, plus {res.config.slippage_bps:g} bps slippage per fill.  ",
-          f"**Average exposure:** {res.exposure.mean():.0%} invested.", "", "![equity](equity.png)", "",
+          f"**Average exposure:** {res.exposure.mean():.0%} invested; idle cash earned Rs {res.interest:,.0f} ({res.config.cash_yield:.1%}/yr).", "", "![equity](equity.png)", "",
           "## Calendar-year returns", "", "| Year | Strategy | Benchmark |", "|---|---|---|"]
     ys, yb = yearly_returns(res.equity), yearly_returns(bench)
     for y in ys.index:
@@ -96,6 +101,7 @@ def write_report(out, res, panel, cut, rf, robust_df, data_label, universe_n):
     md += ["", "## Reality checks", ""] + ([f"- {f}" for f in flags] or ["- No automatic red flags - which is NOT proof the strategy works."])
     md += ["", "## Read this before trusting any number", "",
            "- A backtest is a story about the past, not a forecast. Markets change; edges fade.",
+           "- The index benchmark is price-only (excludes roughly 1.3%/yr of dividends), so it understates buy-and-hold; compare with the equal-weight universe too.",
            "- Prices are adjusted for splits and dividends; fills assume you can trade at the next open plus slippage.",
            "- Tax is not included: delivery gains held under 12 months are taxed as short-term capital gains. Keep records / ask a CA.",
            "- Not investment advice. No result here guarantees future profit."]

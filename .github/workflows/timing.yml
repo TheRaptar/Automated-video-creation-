@@ -1,0 +1,42 @@
+name: Market-filter timing test (index only)
+
+# Does the trend / India VIX filter beat random on/off timing on the Nifty index itself?
+# Like the other workflows, this file must live in the repo's ROOT folder  .github/workflows/
+on:
+  workflow_dispatch:
+    inputs:
+      regime:
+        description: "Filter to test"
+        type: choice
+        options: [trend, macro]
+        default: trend
+      years:
+        description: "Years of history"
+        default: "15"
+
+defaults:
+  run:
+    working-directory: trading-bot
+
+jobs:
+  timing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Self-tests
+        run: pytest -q
+      - name: Timing test on the real index
+        run: python run_timing_test.py --data yahoo --regime ${{ inputs.regime }} --years ${{ inputs.years }}
+      - name: Show report in the run summary
+        if: always()
+        run: cat reports/timing/summary.md >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: timing-${{ inputs.regime }}
+          path: trading-bot/reports/

@@ -6,7 +6,8 @@ slippage, idle-cash yield and an out-of-sample check. **It places no orders and 
 ## Run without installing anything (GitHub Actions)
 Put `trading-bot/` in your repo root and both files from `trading-bot/.github/workflows/` into the repo's ROOT `.github/workflows/`.
 1. **Alpha lab** - which signals carry any information? (factors, liquidity sweeps, supply/demand zones, macro variables)
-2. **Backtest strategy** - pick `multifactor`, `momentum`, `donchian` or `rsi2`; tick *macro* to use India VIX in the market filter.
+2. **Monte Carlo test** - does the strategy beat random stock picking with identical timing and costs?
+3. **Backtest strategy** - pick `multifactor`, `momentum`, `donchian` or `rsi2`; tick *macro* to use India VIX in the market filter.
 Reports appear in the run summary; charts and CSVs are in the downloadable artifact.
 
 Locally: `pip install -r requirements.txt && pytest -q && python run_alphalab.py --data yahoo --macro`
@@ -22,6 +23,9 @@ Locally: `pip install -r requirements.txt && pytest -q && python run_alphalab.py
 | Fundamentals | `fundamentals.py` | bring a point-in-time CSV; reporting lag enforced |
 | VWAP / TWAP / impact model | `execution.py`, `run_execution_demo.py` | cost-optimal slicing maths; sqrt-law impact usable in the backtest (`--slippage-model impact`) |
 
+| Is it stock selection or just timing/cash? | `montecarlo.py`, `run_montecarlo.py` | random-picking null test (same timing, turnover, costs), same-timing control, block bootstrap error bars; idea from the Time Machine skill |
+| Pre-trade risk checks (Phase 3) | `risk_gate.py` | PASS/BLOCK with reasons, risk-based sizing, kill switch; idea from trader-risk / trader-budget |
+
 ## Not possible with free retail data (deliberately not faked)
 Iceberg/dark-pool detection (India has no dark pools; hidden size is invisible), tick-level order flow and sweeps
 (needs level-2/3 history; start recording it in Phase 2), and HFT (latency, order-rate limits, static-IP rules).
@@ -30,3 +34,5 @@ Iceberg/dark-pool detection (India has no dark pools; hidden size is invisible),
 Look at out-of-sample numbers, the *Reality checks* list and the equal-weight-universe column first. Known limits:
 survivorship bias (today's large caps), imperfect Yahoo data, taxes excluded, index benchmark is price-only.
 Not investment advice; no result guarantees future profit.
+
+See `NOTICE.md` for credits.

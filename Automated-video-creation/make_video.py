@@ -32,7 +32,6 @@ import sys
 import textwrap
 import time
 from pathlib import Path
-from typing import Optional
 
 import requests
 
@@ -66,15 +65,9 @@ except ImportError:
     LANGUAGES = {"en": {"name": "English", "native_name": "English", "yt_code": "en", "font_family": "Noto Sans", "rtl": False, "voices": {"default": TTS_VOICE}, "cta": "Follow for more!"}}
     ANIMATED_STYLES = {"animated_myth", "animated_comedy", "animated_anime", "fable", "story", "legend"}
 
-try:
-    import growth_engine
-except ImportError:
-    growth_engine = None
-
 WORK, OUT, HISTORY, STATE = Path("work"), Path("output"), Path("history.json"), Path("state.json")
 FPS = 30
 WORDS_PER_CAPTION = 3
-MEDIA_ATTRIBUTION: list[dict] = []
 
 # Per-format settings, filled in by configure()
 W, H = 1080, 1920
@@ -488,48 +481,26 @@ def _get_profile(category_or_style: str, lang: str = "en") -> dict:
     }
 
 
-def _scrub_banned_opening(text: str) -> str:
-    """Removes generic AI greeting openings ('Hello everyone', 'Welcome back', etc.) if generated."""
-    s = (text or "").strip()
-    patterns = (
-        r"^(hello\s+everyone[!.,:\s]*)",
-        r"^(welcome\s+back(?:\s+to\s+(?:my|our)\s+channel)?[!.,:\s]*)",
-        r"^(hey\s+guys[!.,:\s]*)",
-        r"^(hi\s+everyone[!.,:\s]*)",
-        r"^(in\s+today'?s\s+video[,:\s]*)",
-    )
-    for pat in patterns:
-        s = re.sub(pat, "", s, flags=re.IGNORECASE).strip()
-    return s[:1].upper() + s[1:] if s else text
-
-
 def generate_short(topic, history, state, lang: str = "en") -> dict:
-    learnings = state.get("learnings") or {}
-    default_short = str(learnings.get("optimal_short_duration") or "30-50")
-    if "-" not in default_short:
-        opt = max(24, min(55, int(default_short)))
-        default_short = f"{max(22, opt - 6)}-{min(58, opt + 6)}"
-    total = pick_seconds("VIDEO_SECONDS", default_short if not os.environ.get("VIDEO_SECONDS") else "30-50")
+    total = pick_seconds("VIDEO_SECONDS", "40-60")
     lang_meta = LANGUAGES.get(lang, LANGUAGES["en"])
     if OFFLINE:
         prof = _get_profile("animated_myth", lang=lang)
         return _normalize({
-            "topic": "offline test", "title": "Why A Tiny Squirrel Changed An Ancient Ocean Bridge", "description": "Testing.",
-            "hashtags": ["#Storytelling", "#AIAnimation"], "category": None, "style": "animated_myth",
+            "topic": "offline test", "title": "Offline Animated Test", "description": "Testing.",
+            "hashtags": ["#test", "#animation"], "category": None, "style": "animated_myth",
             "language": lang, "voice_profile": {"voice": prof["voice"], "rate": prof["rate"]},
             "subtitle_color": prof["subtitle_color"],
             "scenes": [
-                {"text": "Every grain of sand built an impossible bridge across the ocean.",
+                {"text": "Every grain of sand builds an unforgettable bridge across the ocean.",
                  "search_terms": ["ocean"], "image_prompt": "3D Pixar squirrel carrying sand by ocean bridge"},
-                {"text": "Why did the giant warriors stop and stare at one tiny creature?",
-                 "search_terms": ["waves"], "image_prompt": "amazed ancient warriors looking at tiny squirrel on shore"},
-                {"text": "Even the smallest hero changes destiny when every step has purpose.",
+                {"text": "Even the smallest hero can change destiny when guided by kindness and courage.",
                  "search_terms": ["forest", "sunset"], "image_prompt": "glowing golden sunset forest blessing"},
                 {"text": lang_meta["cta"],
                  "search_terms": ["sunrise"], "image_prompt": "finished grand ocean bridge sunrise"},
             ]})
 
-    lo, words = max(4, total // 8), int(total * 2.6)
+    lo, words = max(5, total // 9), int(total * 2.5)
     topic_line, category = _topic_line(topic, history, state, False)
     hint = state.get("_style_hint")
     if hint in STYLES:
@@ -540,34 +511,25 @@ def generate_short(topic, history, state, lang: str = "en") -> dict:
     profile = _get_profile(category or style_key, lang=lang)
     style_key = profile.get("style", style_key)
 
-    best_hooks = learnings.get("best_hooks") or []
-    prompt = f"""You are an elite YouTube retention strategist, animation director, and multi-language storyteller.
-Your mission is to craft a high-retention vertical Short for audience '{profile['target_audience']}' in {lang_meta['name']} ({lang}).
+    prompt = f"""You are a master animation director, storyteller, and multi-language creator.
+Your mission is to craft a captivating video tailored for target audience '{profile['target_audience']}' in language {lang_meta['name']} ({lang}).
 
 Genre Style: {STYLES.get(style_key, style_key)}
-Narration Language: {lang_meta['name']} ({lang}) — Write "title", "description", "hashtags", and all scene "text" in natural, conversational {lang_meta['name']}.
-Visual Prompts: Write "image_prompt" and "search_terms" strictly in ENGLISH matching each exact spoken line.
+Narration Language: {lang_meta['name']} ({lang}) — Write "title", "description", "hashtags", and all scene "text" in natural, idiomatic {lang_meta['name']}.
+Visual Prompts: Write "image_prompt" and "search_terms" strictly in ENGLISH.
 Art Style: {profile['art_style']}
 Tone & Pacing: {profile['tone']}
 Guidelines: {profile['guidelines']}
-Proven Channel Hooks: {best_hooks}
 
 {topic_line}
 {_trend_hint(state)}
 
-MANDATORY HIGH-RETENTION STRUCTURE:
-1. First 0-3s (Scene 1): Instant scroll-stopping hook creating a curiosity gap in <=12 words. NEVER say "Hello everyone", "Welcome back", or "Hey guys".
-2. Next 3-15s (Scene 2): Introduce the core topic and pose an unanswered question or tension making viewers stay to discover the answer.
-3. Middle Scenes: Vivid storytelling + unexpected reveal/pattern interrupt. Zero filler sentences. Sound conversational and human.
-4. Final Scene: Satisfying payoff + natural next-video/replay CTA in {lang_meta['name']}.
-
 Return ONLY JSON:
 {{
   "topic": "short topic name",
-  "title": "accurate curiosity-driven title under 62 chars in {lang_meta['name']} (no clickbait)",
-  "description": "1-2 sentence curiosity hook description in {lang_meta['name']}",
-  "hashtags": ["#Storytelling", "#AIAnimation", "#{lang}"],
-  "ideal_seconds": {total},
+  "title": "high-CTR title under 65 chars in {lang_meta['name']} with emoji",
+  "description": "1-2 sentence alluring description in {lang_meta['name']}",
+  "hashtags": ["#story", "#animation", "#{lang}", "#viral"],
   "language": "{lang}",
   "target_audience": "{profile['target_audience']}",
   "style": "{style_key}",
@@ -577,17 +539,18 @@ Return ONLY JSON:
   "subtitle_color": "{profile['subtitle_color']}",
   "scenes": [{{
     "text": "spoken narration in {lang_meta['name']}",
-    "search_terms": ["exact english visual matching narration", "secondary english query"],
-    "image_prompt": "detailed 9:16 animated/cinematic scene prompt matching this exact line in ENGLISH, no text/letters",
+    "search_terms": ["english visual query 1", "english visual query 2"],
+    "image_prompt": "detailed 9:16 animated/cinematic scene prompt in ENGLISH, no text/letters",
     "motion_prompt": "dynamic character action and smooth camera motion in ENGLISH for 24fps AI video",
     "camera_motion": "zoom_in|zoom_out|pan_left|pan_right|pan_up|dolly_pulse",
     "fx": "cinematic|warm_glow|sparkles|eerie_vignette|vibrant"
   }}]
 }}
 Rules:
-- Adapt scene count ({lo} to {lo + 2} scenes) and duration naturally to the story (do NOT pad to hit a fixed length; ~{int(words * 0.9)} words).
-- Last scene ends with a replay-worthy takeaway or follow CTA in {lang_meta['name']}.
-- No text, watermarks, or letters inside image_prompt."""
+- {lo} to {lo + 2} scenes, about {total} seconds (~{int(words * 0.9)} words total).
+- Scene 1 is an instant scroll-stopping hook under 12 words.
+- Last scene ends with a compelling follow CTA in {lang_meta['name']}.
+- No text, watermarks, or letters requested inside image_prompt."""
 
     data = llm_json(prompt, rounds=2, valid=_valid_scenes)
     if not data:
@@ -599,11 +562,9 @@ Rules:
             sys.exit("Could not get a script from Gemini or Groq.")
 
     script = _normalize(data)
-    script["scenes"][0]["text"] = _scrub_banned_opening(script["scenes"][0]["text"])
     new = _review_texts(script["title"], [s["text"] for s in script["scenes"]], lang=lang, style=style_key)
     for sc, t in zip(script["scenes"], new):
         sc["text"] = t
-    script["scenes"][0]["text"] = _scrub_banned_opening(script["scenes"][0]["text"])
     script.update(category=category, style=style_key, language=lang,
                   target_audience=profile["target_audience"],
                   voice_profile=script.get("voice_profile", {"voice": profile["voice"], "rate": profile["rate"]}),
@@ -613,9 +574,8 @@ Rules:
 
 
 def generate_story(topic, history, state, lang: str = "en", animated: bool = False) -> dict:
-    """Produces a 100% AI-animated Reel / Storybook Short with multi-language voiceover & high-retention hook."""
-    learnings = state.get("learnings") or {}
-    total = pick_seconds("VIDEO_SECONDS", "30-50")
+    """Produces a 100% AI-animated Reel / Storybook Short with multi-language voiceover & camera choreography."""
+    total = pick_seconds("VIDEO_SECONDS", "40-60")
     topic_line, category = _topic_line(topic, history, state, False)
     style_hint = state.get("_style_hint") or ""
     if animated and not style_hint and not category:
@@ -633,7 +593,7 @@ def generate_story(topic, history, state, lang: str = "en", animated: bool = Fal
         return _normalize({
             "topic": "offline animated story", "title": "The Golden Bridge Squirrel",
             "description": "Offline animated story demonstration.",
-            "hashtags": ["#AIAnimation", "#Storytelling", f"#{lang}"], "category": category,
+            "hashtags": ["#AIAnimation", "#story", f"#{lang}"], "category": category,
             "style": style_key, "language": lang, "target_audience": profile["target_audience"],
             "voice_profile": {"voice": profile["voice"], "rate": profile["rate"]},
             "subtitle_color": profile["subtitle_color"],
@@ -649,49 +609,41 @@ def generate_story(topic, history, state, lang: str = "en", animated: bool = Fal
                  "camera_motion": "zoom_out", "fx": "cinematic", "search_terms": ["golden sunrise landscape"]},
             ]})
 
-    n_lo = max(5, total // 7)
-    best_hooks = learnings.get("best_hooks") or []
-    prompt = f"""You are a world-class YouTube Retention Writer and AI Animation Director creating animated Reels & Shorts.
-Narration Language: {lang_meta['name']} ({lang}) — Write "title", "description", "hashtags", and all narration "text" natively in natural {lang_meta['name']}.
-Visual Prompts: Write all "image_prompt" and "search_terms" strictly in ENGLISH matching that exact scene.
+    n_lo = max(6, total // 7)
+    prompt = f"""You are a world-class AI Animation Director creating viral animated Instagram Reels & YouTube Shorts.
+Narration Language: {lang_meta['name']} ({lang}) — Write "title", "description", "hashtags", and all narration "text" natively in {lang_meta['name']}.
+Visual Prompts: Write all "image_prompt" and "search_terms" strictly in ENGLISH.
 Genre Style: {STYLES.get(style_key, style_key)}
 Art Style: {profile['art_style']}
 Tone: {profile['tone']}
 Guidelines: {profile['guidelines']}
-Proven Channel Hooks: {best_hooks}
 
 {topic_line}
 {_trend_hint(state)}
 
-MANDATORY HIGH-RETENTION ARC:
-- Scene 1 (0-3s): Immediate curiosity gap or visual reveal under 12 words. NEVER say "Hello everyone" or "Welcome back".
-- Scene 2 (3-15s): Deepen the mystery or unanswered question so viewers stay hooked.
-- Middle Scenes: Pattern interrupts, unexpected twists, zero boring filler.
-- Last Scene: Emotional payoff + smooth loop / next-story CTA in {lang_meta['name']}.
-
 Return ONLY JSON:
 {{
   "topic": "short topic name",
-  "title": "accurate high-CTR animated Reel title in {lang_meta['name']} under 60 chars",
+  "title": "high-CTR animated Reel title in {lang_meta['name']} under 60 chars",
   "description": "1-2 sentence engaging caption in {lang_meta['name']}",
-  "hashtags": ["#AIAnimation", "#Storytelling", "#{lang}"],
-  "ideal_seconds": {total},
+  "hashtags": ["#AIAnimation", "#Reels", "#{lang}", "#Storytelling"],
   "art_style": "{profile['art_style']}",
   "characters": "one English sentence defining consistent animated character appearances",
   "scenes": [{{
     "text": "punchy spoken narration in {lang_meta['name']} (1-2 sentences)",
-    "image_prompt": "detailed vertical 9:16 3D/anime visual frame description in ENGLISH matching this line, no text/letters",
+    "image_prompt": "detailed vertical 9:16 3D/anime visual frame description in ENGLISH, no text/letters",
     "motion_prompt": "dynamic character action, expressive movement, and smooth camera tracking in ENGLISH",
     "camera_motion": "zoom_in|zoom_out|pan_left|pan_right|pan_up|dolly_pulse",
     "fx": "cinematic|warm_glow|sparkles|eerie_vignette|vibrant",
-    "search_terms": ["exact english fallback query"]
+    "search_terms": ["english fallback query"]
   }}]
 }}
 Rules:
-- {n_lo} to {n_lo + 2} scenes totaling ~{total} seconds naturally without filler.
+- {n_lo} to {n_lo + 2} scenes totaling ~{total} seconds of narration.
+- Arc: 1.5s scroll-stopping hook, escalating comedy/wonder/drama, emotional turning point, unforgettable climax, and CTA in {lang_meta['name']}.
 - Keep image_prompt strictly free of any text, words, letters, logos, or watermarks."""
 
-    data = llm_json(prompt, rounds=2, valid=lambda d: _valid_scenes(d, 4))
+    data = llm_json(prompt, rounds=2, valid=lambda d: _valid_scenes(d, 5))
     if not data:
         if RaptarAgent:
             agent = RaptarAgent()
@@ -701,7 +653,6 @@ Rules:
             sys.exit("Could not get an animated story script from Gemini or Groq.")
 
     script = _normalize(data)
-    script["scenes"][0]["text"] = _scrub_banned_opening(script["scenes"][0]["text"])
     STORY.update(art_style=str(data.get("art_style") or profile["art_style"]),
                  characters=str(data.get("characters") or "expressive animated characters"))
     for sc in script["scenes"]:
@@ -865,13 +816,13 @@ Return ONLY JSON: {{"scenes": [{{"text": "...", "search_terms": ["..."], "image_
         prev = chap_scenes[-1]["text"].strip()
         ok += 1
 
-    # Quality conclusion safeguard (real examples/takeaway — zero generic filler)
-    if total_words < int(target_total_words * 0.72):
+    # Final safety expansion pass if total cumulative script words are still below 80% of target_total_words
+    if total_words < int(target_total_words * 0.80):
         needed = target_total_words - total_words
-        print(f"  Conclusion depth pass: adding ~{needed} words of real-world implications/takeaway...")
-        epilogue_prompt = f"""Write a compelling conclusion chapter in {lang_meta['name']} for "{title}" continuing seamlessly from "{prev}".
-Do NOT add empty filler sentences. Deliver 1-2 surprising concrete examples or deeper meaning (~{max(120, needed)} words across 3-4 scenes) and end with a reason to watch the next video.
-Return ONLY JSON: {{"scenes": [{{"text": "...", "search_terms": ["sunrise horizon", "dramatic landscape"], "image_prompt": "16:9 cinematic sunrise landscape", "camera_motion": "zoom_out"}}]}}"""
+        print(f"  Duration safeguard: expanding epilogue by ~{needed} words to meet {total}s target...")
+        epilogue_prompt = f"""Write an extended epilogue & deep reflection chapter in {lang_meta['name']} for "{title}" continuing from "{prev}".
+Write AT LEAST {max(120, needed)} words across 4 scenes so the full video reaches {total // 60} minutes cleanly.
+Return ONLY JSON: {{"scenes": [{{"text": "...", "search_terms": ["sunset horizon", "starry night"], "image_prompt": "16:9 cinematic sunrise landscape", "camera_motion": "zoom_out"}}]}}"""
         extra_ep = llm_json(epilogue_prompt, rounds=1, valid=lambda d: _valid_scenes(d, minimum=2))
         if extra_ep:
             for j, sc in enumerate(extra_ep["scenes"]):
@@ -880,12 +831,10 @@ Return ONLY JSON: {{"scenes": [{{"text": "...", "search_terms": ["sunrise horizo
                     "search_terms": sc.get("search_terms"),
                     "image_prompt": sc.get("image_prompt") or sc["text"],
                     "camera_motion": sc.get("camera_motion"),
-                    "heading": "What It Means" if j == 0 else None,
+                    "heading": "Final Reflections" if j == 0 else None,
                 })
             total_words += sum(len(sc["text"].split()) for sc in extra_ep["scenes"])
 
-    if scenes:
-        scenes[0]["text"] = _scrub_banned_opening(scenes[0]["text"])
     print(f"  Long-form script ready: {len(scenes)} scenes, ~{total_words} words (target ~{target_total_words}).")
     script = {
         "topic": outline.get("topic") or title,
@@ -921,17 +870,12 @@ def _trend_share(state: dict) -> float:
 
 def _trend_hint(state: dict) -> str:
     t = state.get("trends") or {}
-    learnings = state.get("learnings") or {}
     bits = []
     if t.get("format_trends"):
         bits.append("formats that currently work: " + "; ".join(t["format_trends"]))
     if t.get("title_patterns"):
         bits.append("title patterns: " + "; ".join(t["title_patterns"]))
-    if learnings.get("best_hooks"):
-        bits.append("proven channel hooks: " + "; ".join(learnings["best_hooks"][:3]))
-    if learnings.get("avg_drop_off_ratio") is not None:
-        bits.append(f"avoid retention drop around {int(learnings['avg_drop_off_ratio'] * 100)}% mark")
-    return ("Hints from trend & channel analytics: " + " | ".join(bits)) if bits else ""
+    return ("Hints from today's trend research: " + " | ".join(bits)) if bits else ""
 
 
 # ------------------------------------------------------------ 2. multilingual neural voice
@@ -983,14 +927,7 @@ def _download(link: str, dest: Path) -> bool:
         return False
 
 
-def _semantic_match_score(candidate_text: str, narration: str, query: str) -> int:
-    """Scores how well a stock clip's tags/slug match the actual scene narration and query."""
-    c_toks = set(re.findall(r"[a-z]{3,}", (candidate_text or "").lower()))
-    target_toks = set(re.findall(r"[a-z]{3,}", f"{query} {narration}".lower()))
-    return len(c_toks & target_toks)
-
-
-def _pixabay(query: str, dest: Path, used: set, narration: str = "") -> bool:
+def _pixabay(query: str, dest: Path, used: set) -> bool:
     if not PIXABAY_API_KEY:
         return False
     hits = _PIXABAY_CACHE.get(query)
@@ -1006,51 +943,33 @@ def _pixabay(query: str, dest: Path, used: set, narration: str = "") -> bool:
             hits = r.json().get("hits", [])
             _PIXABAY_CACHE[query] = hits
             break
-    avail = [h for h in (hits or []) if f"pixabay:{h['id']}" not in used and h["id"] not in used]
+    avail = [h for h in (hits or []) if h["id"] not in used]
     if not avail:
         return False
-    avail.sort(key=lambda h: -_semantic_match_score(h.get("tags", ""), narration, query))
-    for hit in avail[:3]:
+    for hit in random.sample(avail[:10], min(3, len(avail[:10]))):
         for size in SIZE_ORDER:
             v = hit["videos"].get(size) or {}
             if v.get("url"):
                 used.add(hit["id"])
-                used.add(f"pixabay:{hit['id']}")
                 if _download(v["url"], dest):
-                    MEDIA_ATTRIBUTION.append({
-                        "provider": "pixabay",
-                        "id": str(hit["id"]),
-                        "license": "Pixabay Content License (Commercial Free)",
-                        "url": hit.get("pageURL", ""),
-                    })
                     return True
     return False
 
 
-def _pexels(query: str, dest: Path, used: set, narration: str = "") -> bool:
+def _pexels(query: str, dest: Path, used: set) -> bool:
     if not PEXELS_API_KEY:
         return False
     r = requests.get("https://api.pexels.com/videos/search", headers={"Authorization": PEXELS_API_KEY},
                      params={"query": query, "orientation": ORIENT, "per_page": 15}, timeout=30)
     r.raise_for_status()
-    vids = [v for v in r.json().get("videos", []) if f"pexels:{v['id']}" not in used and v["id"] not in used]
+    vids = [v for v in r.json().get("videos", []) if v["id"] not in used]
     if not vids:
         return False
-    vids.sort(key=lambda v: -_semantic_match_score(v.get("url", ""), narration, query))
-    video = vids[0]
+    video = random.choice(vids[:8])
     files = [f for f in video["video_files"] if f.get("file_type") == "video/mp4"]
     files.sort(key=lambda f: abs((f.get("height") or 0) - H))
     used.add(video["id"])
-    used.add(f"pexels:{video['id']}")
-    if files and _download(files[0]["link"], dest):
-        MEDIA_ATTRIBUTION.append({
-            "provider": "pexels",
-            "id": str(video["id"]),
-            "license": "Pexels License (Free Commercial Use)",
-            "url": video.get("url", ""),
-        })
-        return True
-    return False
+    return bool(files and _download(files[0]["link"], dest))
 
 
 def _gradient(dest: Path, seconds: float, style: str = "") -> None:
@@ -1071,7 +990,7 @@ def _gradient(dest: Path, seconds: float, style: str = "") -> None:
          "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", str(FPS), str(dest)])
 
 
-def fetch_clip(query: str, dest: Path, used: set, seconds: float, style: str = "", narration: str = "") -> None:
+def fetch_clip(query: str, dest: Path, used: set, seconds: float, style: str = "") -> None:
     if not OFFLINE:
         fallbacks = ("creepy shadows", "foggy night") if style == "horror" else (
             ("colorful cartoon clouds", "starry night sky") if style in ("fable", "animated_comedy", "animated_myth")
@@ -1080,7 +999,7 @@ def fetch_clip(query: str, dest: Path, used: set, seconds: float, style: str = "
         for q in (query, " ".join(query.split()[:2]), *fallbacks):
             for provider in (_pexels, _pixabay):
                 try:
-                    if provider(q, dest, used, narration=narration):
+                    if provider(q, dest, used):
                         return
                 except Exception as e:
                     print(f"  {provider.__name__} failed for '{q}': {e}")
@@ -1089,23 +1008,18 @@ def fetch_clip(query: str, dest: Path, used: set, seconds: float, style: str = "
 
 
 # ------------------------------------------------------------ 4. assembly (stock + AI animation)
-def make_visual(idx: int, terms: list[str], total: float, used: set, style: str = "", narration: str = "") -> Path:
-    """Picture track of one scene, normalized to constant FPS with subtle micro-zoom motion."""
+def make_visual(idx: int, terms: list[str], total: float, used: set, style: str = "") -> Path:
+    """Picture track of one scene, normalized to constant FPS & timebase for seamless concat."""
     n = max(1, min(5, round(total / CLIP_LEN)))
     seg_len = total / n
     segs = []
     for k in range(n):
         raw = WORK / f"raw_{idx}_{k}.mp4"
-        fetch_clip(terms[k % len(terms)], raw, used, seg_len + 0.5, style=style, narration=narration)
+        fetch_clip(terms[k % len(terms)], raw, used, seg_len + 0.5, style=style)
         seg = WORK / f"seg_{idx}_{k}.mp4"
-        # Subtle dynamic scale punch + crop (keeps footage fresh and energetic)
-        zoom_vf = (
-            f"scale=trunc(iw*1.06/2)*2:trunc(ih*1.06/2)*2,"
-            f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},setsar=1,fps={FPS}"
-        )
         try:
             run(["ffmpeg", "-y", "-stream_loop", "-1", "-i", str(raw), "-t", f"{seg_len:.3f}",
-                 "-vf", zoom_vf,
+                 "-vf", f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},setsar=1,fps={FPS}",
                  "-an", "-r", str(FPS), "-vsync", "cfr", "-video_track_timescale", "90000",
                  "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", str(seg)])
         except SystemExit:
@@ -1789,25 +1703,8 @@ def _color_to_ass_bgr(c: str) -> str:
     return "&H0000E5FF"
 
 
-def _highlight_keywords_in_chunk(chunk: str, hl_bgr: str, lang: str) -> str:
-    """Highlights high-impact focal keywords inside a caption chunk with inline ASS styling."""
-    words = chunk.split()
-    if len(words) <= 1 or lang not in ("en", "es", "fr", "pt", "de", "id"):
-        return chunk
-    # Emphasize the single most impactful keyword (longest non-stop word >= 5 chars)
-    stop = {"ABOUT", "THERE", "THEIR", "WOULD", "COULD", "SHOULD", "WHERE", "WHICH", "THESE", "THOSE", "EVERY"}
-    best_i = max(range(len(words)), key=lambda i: (0 if words[i].upper() in stop else len(words[i])))
-    styled = []
-    for i, w in enumerate(words):
-        if i == best_i and len(w) >= 4:
-            styled.append(r"{\c" + hl_bgr + r"}" + w + r"{\c&H00FFFFFF&}")
-        else:
-            styled.append(w)
-    return " ".join(styled)
-
-
 def _write_ass_subtitles(idx: int, text: str, dur: float, font_path: str, style_meta: dict, heading: str = None, lang: str = "en") -> Path:
-    """Creates styled ASS subtitles supporting complex scripts + inline keyword highlights."""
+    """Creates a styled ASS subtitle file supporting complex scripts (Tamil, Hindi, Arabic, CJK, Latin)."""
     lang_meta = LANGUAGES.get(lang, LANGUAGES["en"])
     font_name = lang_meta.get("font_family") or Path(font_path).stem.split("-")[0]
     hl_bgr = _color_to_ass_bgr((style_meta or {}).get("subtitle_color", "0x00E5FF"))
@@ -1835,9 +1732,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         for n, (chunk, start, end) in enumerate(caption_chunks(text, dur)):
             display = chunk.upper() if lang in ("en", "es", "fr", "pt", "de", "id") else chunk
             display = display.replace("{", "(").replace("}", ")").replace("\n", " ")
-            display = _highlight_keywords_in_chunk(display, hl_bgr, lang)
-            st_name = "Highlight" if (len(display.split()) == 1 and n % 2 == 1) else "Default"
-            pop = r"{\fscx94\fscy94\t(0,65,\fscx100\fscy100)}"
+            st_name = "Highlight" if n % 2 == 1 else "Default"
+            pop = r"{\fscx92\fscy92\t(0,70,\fscx100\fscy100)}"
             events.append(
                 f"Dialogue: 0,{_fmt_ass_time(start)},{_fmt_ass_time(end)},{st_name},,0,0,0,,{pop}{display}"
             )
@@ -1857,23 +1753,13 @@ def _drawtext(font: str, textfile: Path, style: str, enable: str) -> str:
             f":{style}:enable='{enable}'")
 
 
-def _scene_pad() -> float:
-    return 0.06 if CURRENT_FORMAT != "long" else 0.18
-
-
 def build_scene(idx: int, text: str, visual: Path, audio: Path, dur: float, font: str, heading=None, style_meta: dict = None, lang: str = "en") -> Path:
-    pad = _scene_pad()
-    total = dur + pad
+    total = dur + 0.25
     filters = []
     if CAPTIONS or heading:
         ass_path = _write_ass_subtitles(idx, text, dur, font, style_meta or {}, heading=heading, lang=lang)
         fonts_dir = ff_escape(Path(font).parent)
         filters.append(f"ass='{ff_escape(ass_path)}':fontsdir='{fonts_dir}'")
-    # Subtle micro visual transitions between scenes without breaking concat timeline sync
-    if total >= 0.8:
-        if idx > 0:
-            filters.append("fade=t=in:st=0:d=0.08")
-        filters.append(f"fade=t=out:st={max(0.2, total - 0.08):.2f}:d=0.08")
 
     out = WORK / f"scene_{idx}.mp4"
     run([
@@ -1907,108 +1793,6 @@ def make_thumbnail(video: Path, title: str, font: str) -> Path:
 
 
 # ------------------------------------------------------------ Audio + Visual rendering & Multi-Language Dubbing
-def _apply_growth_postprocess(
-    final: Path,
-    out_dir: Path,
-    script: dict,
-    fmt: str,
-    lang: str,
-    font: str,
-    chapters: list,
-    idea: Optional[dict],
-    state: dict,
-    use_animation: bool,
-) -> dict:
-    """Applies BGM sidechain ducking, 5-title YouTube SEO, 3-concept thumbnails, and 10-factor QC."""
-    bgm_mixed = False
-    if growth_engine and os.environ.get("ENABLE_BGM", "1") == "1":
-        bgm_path = WORK / f"bgm_{lang}.mp3"
-        final_dur = media_duration(final)
-        if growth_engine.synthesize_bgm(script.get("style", "story"), final_dur + 1.0, bgm_path):
-            bgm_mixed = growth_engine.mix_narration_and_bgm(final, bgm_path, final)
-
-    seo = {}
-    if growth_engine:
-        seo = growth_engine.optimize_youtube_seo(
-            {**script, "format": fmt},
-            learnings=state.get("learnings"),
-            llm_json_fn=llm_json,
-            offline=OFFLINE,
-        )
-
-    final_title = str(seo.get("selected_title") or script["title"])
-    clean_hashtags = seo.get("hashtags") or [h for h in script["hashtags"] if "viral" not in h.lower()]
-    opening_desc = str(seo.get("opening_description") or script["description"]).strip()
-    desc = opening_desc
-    if script["description"].strip() and script["description"].strip() != opening_desc:
-        desc += "\n\n" + script["description"].strip()
-    if fmt == "long" and len(chapters) >= 3 and chapters[0][0] == 0:
-        desc += "\n\nChapters:\n" + "\n".join(f"{fmt_ts(t)} {h}" for t, h in chapters)
-    desc += "\n\n" + " ".join(clean_hashtags)
-    desc += "\n\nAI Animated & Narrated via Raptar Autonomous Engine."
-
-    # Generate 3 thumbnail concepts & select winner for BOTH Shorts & Long-Form
-    thumb_path = out_dir / "thumbnail.jpg"
-    thumb_report = {}
-    if growth_engine:
-        thumb_report = growth_engine.generate_thumbnails(
-            video=final,
-            script={**script, "title": final_title},
-            work_dir=WORK,
-            out_thumb=thumb_path,
-            font=font,
-            seo=seo,
-            gen_image_fn=gen_image,
-            llm_json_fn=llm_json,
-            offline=OFFLINE,
-        )
-    if not thumb_path.exists():
-        make_thumbnail(final, final_title, font)
-        if thumb_path != (OUT / "thumbnail.jpg") and (OUT / "thumbnail.jpg").exists():
-            shutil.copy2(OUT / "thumbnail.jpg", thumb_path)
-
-    first_hook = str(((script.get("scenes") or [{}])[0]).get("text") or "")[:160]
-    meta = {
-        "format": fmt,
-        "language": lang,
-        "topic": script["topic"],
-        "topic_score": (idea or {}).get("score"),
-        "title": final_title,
-        "description": desc,
-        "hashtags": clean_hashtags,
-        "category": script.get("category"),
-        "style": script.get("style"),
-        "hook": first_hook,
-        "duration": round(media_duration(final), 2),
-        "animated": use_animation,
-        "ai_video_clips": _AI_VIDEO_COUNT,
-        "bgm_mixed": bgm_mixed,
-        "transitions_applied": True,
-        "source": "trend" if idea else "category",
-        "seo": seo,
-        "thumbnail": {
-            "winner": thumb_report.get("winner"),
-            "score": thumb_report.get("winner_score"),
-            "hook_text": thumb_report.get("hook_text"),
-        },
-        "licenses": list(MEDIA_ATTRIBUTION),
-    }
-
-    qc_report = {}
-    if growth_engine:
-        qc_report = growth_engine.evaluate_video_quality(
-            final, meta, script, thumb_report=thumb_report, llm_json_fn=llm_json, offline=OFFLINE
-        )
-        meta["qc"] = {
-            "overall_score": qc_report.get("overall_score"),
-            "passed": qc_report.get("passed"),
-            "scores": qc_report.get("scores"),
-        }
-
-    (out_dir / "metadata.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
-    return meta
-
-
 def _render_language_variant(
     script: dict,
     fmt: str,
@@ -2016,27 +1800,28 @@ def _render_language_variant(
     out_dir: Path,
     lang: str,
     idea_used: bool,
-    state: dict = None,
 ) -> Path:
     """Renders localized voiceovers and native subtitles onto pre-rendered visual_tracks."""
     out_dir.mkdir(parents=True, exist_ok=True)
     font = find_font(lang)
     voice_prof = script.get("voice_profile")
+    script_style = script.get("style", "")
     style_meta = {
         "subtitle_color": script.get("subtitle_color") or "0x00E5FF",
         "subtitle_shadow": "0x000000",
     }
 
     scenes, chapters, elapsed = [], [], 0.0
-    pad = _scene_pad()
     for i, (sc, vis) in enumerate(zip(script["scenes"], visual_tracks)):
         audio = WORK / f"voice_{lang}_{i}.mp3"
         dur = make_voice(sc["text"], audio, voice_profile=voice_prof)
+        vis_dur = media_duration(vis)
+        # Ensure we use clean matching duration so audio never overruns or desyncs
         if sc.get("heading"):
             chapters.append((elapsed, sc["heading"]))
         scene_vid = build_scene(i, sc["text"], vis, audio, dur, font, sc.get("heading"), style_meta=style_meta, lang=lang)
         scenes.append(scene_vid)
-        elapsed += dur + pad
+        elapsed += dur + 0.25
 
     listfile = WORK / f"list_{lang}.txt"
     listfile.write_text("".join(f"file '{s.name}'\n" for s in scenes), encoding="utf-8")
@@ -2044,10 +1829,20 @@ def _render_language_variant(
     run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(listfile),
          "-c", "copy", "-movflags", "+faststart", str(final)])
 
-    _apply_growth_postprocess(
-        final, out_dir, script, fmt, lang, font, chapters,
-        {"score": 7.8} if idea_used else None, state or {}, True,
-    )
+    desc = script["description"].strip()
+    if fmt == "long":
+        if len(chapters) >= 3 and chapters[0][0] == 0:
+            desc += "\n\nChapters:\n" + "\n".join(f"{fmt_ts(t)} {h}" for t, h in chapters)
+        make_thumbnail(final, script["title"], font)
+    desc += "\n\n" + " ".join(script["hashtags"])
+    desc += "\n\nGenerated with AI animation & neural voice narration."
+    meta = {
+        "format": fmt, "language": lang, "topic": script["topic"], "title": script["title"],
+        "description": desc, "hashtags": script["hashtags"],
+        "category": script.get("category"), "style": script.get("style"),
+        "source": "trend" if idea_used else "category",
+    }
+    (out_dir / "metadata.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
     return final
 
 
@@ -2064,7 +1859,6 @@ def main() -> None:
     configure(fmt)
     global _AI_VIDEO_COUNT
     _AI_VIDEO_COUNT = 0
-    MEDIA_ATTRIBUTION.clear()
 
     if not OFFLINE and not (GEMINI_API_KEY or GROQ_API_KEY):
         sys.exit("Missing GEMINI_API_KEY (and/or GROQ_API_KEY).")
@@ -2074,7 +1868,7 @@ def main() -> None:
     shutil.rmtree(WORK, ignore_errors=True)
     WORK.mkdir()
     OUT.mkdir(exist_ok=True)
-    for stale in ("thumbnail.jpg", "thumbnail_candidates.json", "quality_report.json", "video.mp4", "metadata.json"):
+    for stale in ("thumbnail.jpg", "video.mp4", "metadata.json"):
         (OUT / stale).unlink(missing_ok=True)
     for old_lang_dir in OUT.glob("lang_*"):
         shutil.rmtree(old_lang_dir, ignore_errors=True)
@@ -2097,7 +1891,7 @@ def main() -> None:
         topic = f"{idea['topic']}. Angle: {idea.get('angle', '')}."
         if idea.get("style") in STYLES:
             state["_style_hint"] = idea["style"]
-        print(f"    Trend idea picked: {idea['topic']} (score={idea.get('score')})")
+        print(f"    Trend idea picked: {idea['topic']}")
 
     print(f"1/4 Scripting ({fmt} | language={primary_lang})...")
     if fmt in ("story", "animated"):
@@ -2126,10 +1920,8 @@ def main() -> None:
     )
     print(f"    Topic: {script['topic']}\n    Title: {script['title']}\n    Style: {script_style} (Animated Engine: {use_animation})\n    Scenes: {len(script['scenes'])}")
 
-    # Seed cross-video deduplication from persistent state so stock clips aren't recycled
-    used: set = set(state.get("used_media_ids", []))
+    used: set = set()
     scenes, chapters, visual_tracks, elapsed = [], [], [], 0.0
-    pad = _scene_pad()
     voice_prof = script.get("voice_profile")
     style_meta = {
         "subtitle_color": script.get("subtitle_color") or ("0x0000CC" if script_style == "horror" else "0x00E5FF"),
@@ -2145,30 +1937,37 @@ def main() -> None:
             chapters.append((elapsed, sc["heading"]))
 
         visual = None
-        if use_animation or (sc.get("image_prompt") and not (PIXABAY_API_KEY or PEXELS_API_KEY)):
-            visual = make_animated_visual(i, sc, dur + pad, style=script_style)
+        if use_animation or (fmt == "long" and i % 3 == 0 and sc.get("image_prompt")):
+            visual = make_animated_visual(i, sc, dur + 0.25, style=script_style)
         if visual is None:
-            visual = make_visual(i, sc["search_terms"], dur + pad, used, style=script_style, narration=sc["text"])
+            visual = make_visual(i, sc["search_terms"], dur + 0.25, used, style=script_style)
 
         visual_tracks.append(visual)
         scenes.append(build_scene(i, sc["text"], visual, audio, dur, font, sc.get("heading"), style_meta=style_meta, lang=primary_lang))
-        elapsed += dur + pad
+        elapsed += dur + 0.25
 
-    print("4/4 Joining scenes & mastering audio/thumbnails/QC...")
+    print("4/4 Joining scenes...")
     listfile = WORK / "list.txt"
     listfile.write_text("".join(f"file '{s.name}'\n" for s in scenes), encoding="utf-8")
     final = OUT / "video.mp4"
     run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(listfile),
          "-c", "copy", "-movflags", "+faststart", str(final)])
 
-    meta = _apply_growth_postprocess(
-        final, OUT, script, fmt, primary_lang, font, chapters, idea, state, use_animation,
-    )
-    print(
-        f"    SEO Title: {meta['title']} | Category ID: {meta.get('seo', {}).get('category_id')} | "
-        f"Thumb: {meta.get('thumbnail', {}).get('winner')} | "
-        f"QC Score: {meta.get('qc', {}).get('overall_score')}/10 (passed={meta.get('qc', {}).get('passed')})"
-    )
+    desc = script["description"].strip()
+    if fmt == "long":
+        if len(chapters) >= 3 and chapters[0][0] == 0:
+            desc += "\n\nChapters:\n" + "\n".join(f"{fmt_ts(t)} {h}" for t, h in chapters)
+        make_thumbnail(final, script["title"], font)
+    desc += "\n\n" + " ".join(script["hashtags"])
+    desc += "\n\nAI Animated & Narrated via Raptar Autonomous Engine."
+    meta = {
+        "format": fmt, "language": primary_lang, "topic": script["topic"], "title": script["title"],
+        "description": desc, "hashtags": script["hashtags"],
+        "category": script.get("category"), "style": script.get("style"),
+        "animated": use_animation, "ai_video_clips": _AI_VIDEO_COUNT,
+        "source": "trend" if idea else "category",
+    }
+    (OUT / "metadata.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
 
     # Optional multi-language dubbing from the same rendered visual tracks
     dub_langs = [c.strip().lower() for c in (args.dub or "").split(",") if c.strip() and c.strip().lower() != primary_lang and c.strip().lower() in LANGUAGES]
@@ -2181,7 +1980,7 @@ def main() -> None:
             if OFFLINE:
                 prof = _get_profile(script_style, lang=dlang)
                 loc_script["voice_profile"] = {"voice": prof["voice"], "rate": prof["rate"]}
-            _render_language_variant(loc_script, fmt, visual_tracks, OUT / f"lang_{dlang}", dlang, bool(idea), state=state)
+            _render_language_variant(loc_script, fmt, visual_tracks, OUT / f"lang_{dlang}", dlang, bool(idea))
 
     if not OFFLINE:
         save_history(history + [script["topic"]])
@@ -2189,7 +1988,6 @@ def main() -> None:
             state["recent_categories"] = (state.get("recent_categories", []) + [script["category"]])[-10:]
         if script.get("style"):
             state["last_style"] = script["style"]
-        state["used_media_ids"] = [str(u) for u in used if isinstance(u, str) and ":" in u][-400:]
         state.pop("_style_hint", None)
         save_state(state)
 

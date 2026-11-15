@@ -533,9 +533,6 @@ app.get('/api/videos', (req, res) => {
       createdAt: stat.mtime.toISOString(),
       videoUrl: '/api/media/output/video.mp4',
       thumbnailUrl: fs.existsSync(mainThumb) ? '/api/media/output/thumbnail.jpg' : null,
-      qc: meta.qc || null,
-      seo: meta.seo || null,
-      thumbnail: meta.thumbnail || null,
       status: agentState.status === 'ready_for_approval' ? 'ready_for_review' : 'completed',
     });
   }
@@ -571,9 +568,6 @@ app.get('/api/videos', (req, res) => {
           createdAt: stat.mtime.toISOString(),
           videoUrl: `/api/media/archive/${arc}/video.mp4`,
           thumbnailUrl: fs.existsSync(arcThumb) ? `/api/media/archive/${arc}/thumbnail.jpg` : null,
-          qc: meta.qc || null,
-          seo: meta.seo || null,
-          thumbnail: meta.thumbnail || null,
           status: 'archived',
         });
       }
@@ -778,34 +772,6 @@ app.put('/api/memory', (req, res) => {
   res.json({ success: true, memory: state.weights });
 });
 
-// 9b. Organic Growth, YouTube Analytics Learnings, QC & Publish Logs
-app.get('/api/analytics', (req, res) => {
-  const state = getState();
-  let qualityReport: any = null;
-  let thumbnailCandidates: any = null;
-  const qcPath = path.join(OUTPUT_DIR, 'quality_report.json');
-  const thumbPath = path.join(OUTPUT_DIR, 'thumbnail_candidates.json');
-  try {
-    if (fs.existsSync(qcPath)) {
-      qualityReport = JSON.parse(fs.readFileSync(qcPath, 'utf-8'));
-    }
-  } catch {}
-  try {
-    if (fs.existsSync(thumbPath)) {
-      thumbnailCandidates = JSON.parse(fs.readFileSync(thumbPath, 'utf-8'));
-    }
-  } catch {}
-
-  res.json({
-    learnings: state.learnings || {},
-    analyticsSnapshot: state.analytics_snapshot || {},
-    recentVideos: (state.videos || []).slice(-20).reverse(),
-    publishLogs: (state.publish_logs || []).slice(-30).reverse(),
-    qualityReport,
-    thumbnailCandidates,
-  });
-});
-
 // 10. System Configuration
 app.get('/api/config', (req, res) => {
   res.json({
@@ -999,9 +965,8 @@ async function startServer() {
     <h3>Available Automation Endpoints</h3>
     <div class="endpoints">
       <div>GET  /api/agent/state    - Engine state, logs & publishing status</div>
-      <div>GET  /api/videos         - Output video catalog, SEO & QC metadata</div>
-      <div>GET  /api/trends         - Scored growth trends & viewer demand</div>
-      <div>GET  /api/analytics      - YouTube Analytics learnings, QC & publish logs</div>
+      <div>GET  /api/videos         - Output video catalog & metadata</div>
+      <div>GET  /api/trends         - Market trend radar & AI ideation</div>
       <div>GET  /api/memory         - Strategic category weights & history</div>
       <div>POST /api/agent/trigger  - Dispatch manual production run</div>
     </div>

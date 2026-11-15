@@ -1,15 +1,24 @@
 name: Generate and publish videos
 
-# Quality-focused schedule (UTC): 3 focused slots per day instead of high-frequency scatter:
-#   Slot 1 (08:00 UTC): 1x Animated Reel / Short
-#   Slot 2 (13:30 UTC): 1x High-Retention Long-Form Video
-#   Slot 3 (18:00 UTC): 1x Vertical YouTube Short / Story
+# All cron times are UTC.
+# Scheduled throughout the 24-hour cycle at global peak viewing times:
+# Slot 1: 01:00 UTC = 06:30 AM IST / 05:00 PM PST (Day before)
+# Slot 2: 04:30 UTC = 10:00 AM IST / 08:30 PM PST (Day before)
+# Slot 3: 08:00 UTC = 01:30 PM IST / 12:00 AM PST
+# Slot 4: 11:30 UTC = 05:00 PM IST / 03:30 AM PST
+# Slot 5: 15:00 UTC = 08:30 PM IST / 07:00 AM PST
+# Slot 6: 18:30 UTC = 12:00 AM IST / 10:30 AM PST
+# Slot 7: 22:00 UTC = 03:30 AM IST / 02:00 PM PST
 
 on:
   schedule:
+    - cron: "0 1 * * *"
+    - cron: "30 4 * * *"
     - cron: "0 8 * * *"
-    - cron: "30 13 * * *"
-    - cron: "0 18 * * *"
+    - cron: "30 11 * * *"
+    - cron: "0 15 * * *"
+    - cron: "30 18 * * *"
+    - cron: "0 22 * * *"
 
   workflow_dispatch:
     inputs:
@@ -25,9 +34,10 @@ on:
         required: true
 
       language:
-        description: "Primary language (recommend fixed channel language 'en', or pick another)"
+        description: "Primary narration & subtitle language (or 'auto' to rotate)"
         type: choice
         options:
+          - auto
           - en
           - ta
           - hi
@@ -39,7 +49,6 @@ on:
           - ko
           - ar
           - id
-          - auto
         default: en
         required: false
 
@@ -49,7 +58,7 @@ on:
         required: false
 
       categories:
-        description: "Optional custom theme/niche"
+        description: "Optional custom theme/niche (e.g. 3D Animated Mythological & Cultural Epics, 3D Cartoon Character Comedies)"
         type: string
         required: false
 
@@ -71,7 +80,7 @@ jobs:
 
     env:
       INPUT_FORMAT: ${{ github.event.inputs.format || '' }}
-      TARGET_LANGUAGE: ${{ github.event.inputs.language || 'en' }}
+      TARGET_LANGUAGE: ${{ github.event.inputs.language || 'auto' }}
       DUB_LANGUAGES: ${{ github.event.inputs.dub_languages || '' }}
       CATEGORIES: ${{ github.event.inputs.categories || '' }}
 
@@ -80,9 +89,11 @@ jobs:
       TZ: Asia/Kolkata
 
     steps:
+      # 1. Get the latest source code
       - name: Checkout repository
         uses: actions/checkout@v7
 
+      # 2. Select optimal format for cron slots vs manual dispatch
       - name: Determine effective format
         id: pick_format
         run: |
@@ -91,15 +102,17 @@ jobs:
           else
             UTC_HOUR=$(date -u +%H)
             case "$UTC_HOUR" in
-              08) FMT="animated" ;;
-              13) FMT="long" ;;
-              *)  FMT="short" ;;
+              01|11|18) FMT="animated" ;;
+              08)       FMT="long" ;;
+              15)       FMT="story" ;;
+              *)        FMT="short" ;;
             esac
           fi
           echo "EFFECTIVE_FORMAT=$FMT" >> "$GITHUB_ENV"
           echo "VIDEO_FORMAT=$FMT" >> "$GITHUB_ENV"
           echo "Effective video format selected: $FMT"
 
+      # 3. Set up Python with dependency caching
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
@@ -107,6 +120,7 @@ jobs:
           cache: pip
           cache-dependency-path: Automated-video-creation/requirements.txt
 
+      # 4. Install FFmpeg and multilingual Noto fonts
       - name: Install FFmpeg and fonts
         run: |
           sudo apt-get update
@@ -118,37 +132,40 @@ jobs:
             fonts-noto-cjk
           ffmpeg -version
 
+      # 5. Install Python dependencies
       - name: Install Python packages
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
-      - name: Generate AI video (Growth, SEO, Thumbnails & QC)
+      # 6. Generate the video using Gemini, Edge-TTS, Free ZeroGPU AI Video (Wan 2.2 / LTX-Video) & FFmpeg
+      - name: Generate AI video
         id: generate
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          # Optional free Hugging Face read token (zero billing) for dedicated ZeroGPU daily quota
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+
+          # Optional YouTube API key for trend research/performance feedback
           YT_API_KEY: ${{ secrets.YT_API_KEY }}
 
+          # Enable trend research & free AI animated pipelines (Wan 2.2 I2V -> LTX-Video -> Ken Burns)
           TRENDS: "1"
           ANIMATED_MODE: "auto"
           FREE_VIDEO_PROVIDER: "auto"
           VIDEO_AI_CLIPS_MAX: "8"
-          ENABLE_BGM: "1"
-          BGM_VOLUME: "0.14"
-          QC_MIN_SCORE: "6.5"
 
-          # Topic-adaptive durations (not arbitrarily rigid)
-          VIDEO_SECONDS: "30-50"
+          # Video duration settings
+          VIDEO_SECONDS: "40-60"
           LONG_SECONDS: "300-420"
 
         run: |
           echo "=================================="
           echo "Video format: $EFFECTIVE_FORMAT"
-          echo "Primary language: ${TARGET_LANGUAGE:-en}"
+          echo "Primary language: ${TARGET_LANGUAGE:-auto}"
           echo "Dub languages: ${DUB_LANGUAGES:-none}"
           echo "Categories: ${CATEGORIES:-AI-selected topics}"
           echo "=================================="
@@ -163,7 +180,8 @@ jobs:
 
           python make_video.py "${ARGS[@]}"
 
-      - name: Save generated videos, thumbnails & QC reports
+      # 7. Save generated videos as downloadable artifacts
+      - name: Save generated videos
         if: always()
         uses: actions/upload-artifact@v7
         with:
@@ -172,7 +190,8 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
-      - name: Upload to YouTube & Sync Analytics
+      # 8. Upload to YouTube
+      - name: Upload to YouTube
         if: steps.generate.outcome == 'success'
         continue-on-error: true
         env:
@@ -180,29 +199,28 @@ jobs:
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
           YT_PRIVACY: public
-          YT_ANALYTICS_SYNC: "1"
-          QC_STRICT: "1"
-          QC_MIN_SCORE: "6.5"
-          MAX_SHORTS_PER_DAY: "2"
-          MAX_LONG_PER_DAY: "1"
-          MAX_UPLOADS_PER_DAY: "4"
+          MAX_UPLOADS_PER_DAY: "10"
         run: |
           python upload_youtube.py
 
-      - name: Post Short/Animated Reel to Instagram
+      # 9. Publish Animated Reels, Shorts, and Stories to Instagram
+      - name: Post to Instagram
         if: steps.generate.outcome == 'success' && env.EFFECTIVE_FORMAT != 'long'
         continue-on-error: true
         env:
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
           IG_TOKEN_PASSPHRASE: ${{ secrets.IG_TOKEN_PASSPHRASE }}
+
           CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
           CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
           CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
-          MAX_IG_POSTS_PER_DAY: "3"
+
+          MAX_IG_POSTS_PER_DAY: "10"
         run: |
           python upload_instagram.py
 
-      - name: Save history, analytics learnings and publish logs
+      # 9. Save generation history and state
+      - name: Save history, trends and logs
         if: always()
         run: |
           git config user.name "video-bot"
@@ -211,7 +229,7 @@ jobs:
           git add history.json state.json ig_token.enc 2>/dev/null || true
 
           if ! git diff --staged --quiet; then
-            git commit -m "Update video history, trends and analytics learnings"
+            git commit -m "Update video generation history"
             git pull --rebase origin "${GITHUB_REF_NAME}"
             git push origin "HEAD:${GITHUB_REF_NAME}"
           else

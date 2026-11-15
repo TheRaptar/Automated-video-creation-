@@ -444,8 +444,8 @@ def build_caption(metadata: dict) -> str:
     raw_tags = metadata.get("hashtags", [])
     clean_tags = " ".join(list(dict.fromkeys(
         [t if t.startswith("#") else f"#{t}" for t in raw_tags]
-        + ["#reels", "#AIAnimation", "#storytelling", f"#{lang}"]
-    ))[:10])
+        + ["#reels", "#AIAnimation", "#storytelling", "#viral", f"#{lang}"]
+    )))
 
     caption = (
         f"{title}\n\n"

@@ -121,6 +121,11 @@ class RSI2Pullback(Strategy):
         return Signals(desired, -r)
 
 
+def rebalance_starts(S: np.ndarray, rebalance_days: int, top_n: int) -> list:
+    """Rebalance row indices: every `rebalance_days` rows once at least `top_n` stocks have a score."""
+    return [i for i in range(0, S.shape[0], rebalance_days) if np.isfinite(S[i]).sum() >= top_n]
+
+
 @dataclass
 class MultiFactor(Strategy):
     """Rank stocks by a multi-factor score; rebalance every `rebalance_days`; keep current holdings while they stay
@@ -136,9 +141,9 @@ class MultiFactor(Strategy):
     stop_atr_mult = None
     trailing_stop = False
 
-    def signals(self, p):
+    def target(self, p):
+        """(score table, UNGATED desired-holdings table). Split out so Monte Carlo controls can reuse it."""
         from .factors import compute_factors
-        from .macro import risk_on
         from .multifactor import composite, ridge_scores
         f = compute_factors(p, list(self.factors))
         score = ridge_scores(f, list(self.factors), p) if self.model == "ridge" else composite(f, list(self.factors))
@@ -146,7 +151,7 @@ class MultiFactor(Strategy):
         T, N = S.shape
         desired = np.zeros((T, N), bool)
         held: set = set()
-        starts = [i for i in range(0, T, self.rebalance_days) if np.isfinite(S[i]).sum() >= self.top_n]
+        starts = rebalance_starts(S, self.rebalance_days, self.top_n)
         for k, i in enumerate(starts):
             valid = np.flatnonzero(np.isfinite(S[i]))
             order = valid[np.argsort(-S[i, valid], kind="stable")]
@@ -156,12 +161,21 @@ class MultiFactor(Strategy):
             held = set(new[: self.top_n])
             end = starts[k + 1] if k + 1 < len(starts) else T
             desired[i:end, list(held)] = True
-        df = pd.DataFrame(desired, index=score.index, columns=score.columns)
+        return score, pd.DataFrame(desired, index=score.index, columns=score.columns)
+
+    def gate(self, p):
+        """Market-regime on/off series (True = allowed to be invested), or None for regime='none'."""
+        from .macro import risk_on
         if self.regime == "trend":
-            df = _gate(df, risk_on(None, p.benchmark))
-        elif self.regime == "macro":
-            df = _gate(df, risk_on(p.macro, p.benchmark))
-        return Signals(df, score)
+            return risk_on(None, p.benchmark)
+        if self.regime == "macro":
+            return risk_on(p.macro, p.benchmark)
+        return None
+
+    def signals(self, p):
+        score, df = self.target(p)
+        g = self.gate(p)
+        return Signals(df if g is None else _gate(df, g), score)
 
 
 STRATEGIES = {"momentum": TrendMomentum, "donchian": Donchian, "rsi2": RSI2Pullback, "multifactor": MultiFactor}

@@ -508,6 +508,111 @@ def test_free_ai_video_engine():
         shutil.rmtree(test_work, ignore_errors=True)
 
 
+@test("1.8 Motion Engine (Theatre.js Keyframes, SVG.js Parallax & Gemini SVG Auto-Rigging)")
+def test_motion_engine_svg_and_keyframes():
+    import motion_engine as me
+    import make_video
+    import shutil
+    make_video.configure("animated")
+    test_work = SCRIPT_DIR / "test_motion_work"
+    test_work.mkdir(exist_ok=True)
+    try:
+        # 1. Verify cubic-bezier, spring, color lerp & Theatre.js-style MotionSheet
+        sheet = me.build_scene_motion_sheet(3.0, motion="dolly_pulse")
+        v0, v5, v1 = sheet.sample(0.0), sheet.sample(0.5), sheet.sample(1.0)
+        assert abs(v0["cam_scale"] - 1.02) < 0.02, f"Unexpected start scale: {v0}"
+        assert v5["cam_scale"] > 1.04, f"Expected pulse peak > 1.04, got {v5}"
+        assert me.lerp_value("#000000", "#ffffff", 0.5) in ("#7f7f7f", "#808080")
+        assert sheet.to_dict()["sheet"] == "scene_dolly_pulse"
+
+        # 2. Render procedural 6-layer animated SVG sequence
+        out_proc = test_work / "proc_motion.mp4"
+        ok_proc = me.render_animated_svg_scene(
+            out_proc, 1080, 1920, 2.0, fps=30, style="animated_myth", idx=0, motion="zoom_in", fx="warm_glow"
+        )
+        assert ok_proc and make_video._valid_video(out_proc), "Procedural animated SVG render failed"
+        dur_proc = make_video.media_duration(out_proc)
+        assert 1.8 <= dur_proc <= 2.2, f"Unexpected procedural SVG duration: {dur_proc}"
+
+        # 3. Auto-rig a Gemini-style SVG into depth-stratified parallax layers + particles
+        sample_svg = """<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
+          <rect width="1080" height="1920" fill="#0f172a"/>
+          <circle cx="540" cy="450" r="160" fill="#fbbf24"/>
+          <path d="M0 1280 Q540 1120 1080 1280 L1080 1920 L0 1920 Z" fill="#1e293b"/>
+          <circle cx="540" cy="1100" r="95" fill="#38bdf8"/>
+        </svg>"""
+        out_rig = test_work / "rig_motion.mp4"
+        ok_rig = me.render_animated_svg_scene(
+            out_rig, 1080, 1920, 1.8, fps=30, style="animated_anime", idx=1, motion="pan_right",
+            fx="anime_neon", base_svg=sample_svg,
+        )
+        assert ok_rig and make_video._valid_video(out_rig), "Gemini SVG auto-rigging render failed"
+        return {"proc_dur": round(dur_proc, 2), "rig_ok": True, "tracks": len(sheet.tracks)}
+    finally:
+        shutil.rmtree(test_work, ignore_errors=True)
+
+
+@test("1.9 Particle VFX, Natron Compositor, xfade Transitions & Synfig .sif Export")
+def test_particles_compositor_transitions_and_synfig():
+    import motion_engine as me
+    import make_video
+    import shutil
+    import xml.etree.ElementTree as ET
+    make_video.configure("animated")
+    test_work = SCRIPT_DIR / "test_vfx_work"
+    test_work.mkdir(exist_ok=True)
+    orig_work = make_video.WORK
+    make_video.WORK = test_work
+    try:
+        # 1. Verify all 5 Effekseer/OpenVDB particle presets emit valid SVG groups
+        presets = ("sparks_embers", "sakura_petals", "volumetric_mist", "cyber_motes", "magic_stars")
+        for preset in presets:
+            em = me.ParticleEmitter(preset, 540, 960, seed=7)
+            frag = em.render_svg_group(1.25)
+            assert frag.startswith('<g id="vfx-particles">') and frag.endswith("</g>"), f"Invalid particle SVG for {preset}"
+
+        # 2. Verify Natron CompositorGraph filter compilation & audio mastering filter
+        graph = me.CompositorGraph().add("scale_crop", w=1080, h=1920).add("grade", fx="warm_glow").add("fps", fps=30).add("sar")
+        vf = graph.compile()
+        assert "scale=1080:1920" in vf and "colorbalance=" in vf and "fps=30" in vf
+        af = me.build_audio_master_filter(3.5)
+        assert "acompressor=" in af and "atrim=0:3.500" in af
+
+        # 3. Verify particle alpha overlay compositing + xfade/acrossfade scene joining
+        base_v = test_work / "base.mp4"
+        make_video.run([
+            "ffmpeg", "-y", "-f", "lavfi",
+            "-i", "gradients=s=1080x1920:c0=0x170d33:c1=0xb5446e:duration=1.6:rate=30",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", str(base_v),
+        ])
+        ov_v = test_work / "with_vfx.mp4"
+        assert me.composite_particles_onto_video(base_v, ov_v, 1080, 1920, 1.6, style="animated_myth", idx=2)
+        assert make_video._valid_video(ov_v), "Particle-composited clip invalid"
+
+        aud = test_work / "aud.mp3"
+        make_video.run([
+            "ffmpeg", "-y", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+            "-t", "1.4", "-q:a", "9", "-acodec", "libmp3lame", str(aud),
+        ])
+        font = make_video.find_font("en")
+        s1 = make_video.build_scene(201, "First animated scene", ov_v, aud, 1.4, font, lang="en")
+        s2 = make_video.build_scene(202, "Second animated scene", base_v, aud, 1.4, font, lang="en")
+        joined = test_work / "joined_xfade.mp4"
+        assert me.join_scenes_with_transitions([s1, s2], joined, style="animated_myth", fps=30, transition_dur=0.25)
+        assert make_video._valid_video(joined)
+        jdur = make_video.media_duration(joined)
+        assert 2.8 <= jdur <= 3.3, f"Unexpected xfade joined duration: {jdur}"
+
+        # 4. Verify Synfig Studio .sif XML export
+        sif_path = me.export_synfig_sif(test_work / "scene.sif", 1080, 1920, 3.0, fps=30, style="animated_myth", title="Demo")
+        root = ET.fromstring(sif_path.read_text(encoding="utf-8"))
+        assert root.tag == "canvas" and root.attrib.get("width") == "1080" and len(root.findall("layer")) >= 2
+        return {"presets": len(presets), "xfade_dur": round(jdur, 2), "synfig_layers": len(root.findall("layer"))}
+    finally:
+        make_video.WORK = orig_work
+        shutil.rmtree(test_work, ignore_errors=True)
+
+
 if __name__ == "__main__":
     print("=====================================================")
     print("        RAPTAR TECHNICAL VERIFICATION SUITE         ")
@@ -528,6 +633,8 @@ if __name__ == "__main__":
     test_raptar_agent_engine()
     test_multilingual_and_animated_agent()
     test_free_ai_video_engine()
+    test_motion_engine_svg_and_keyframes()
+    test_particles_compositor_transitions_and_synfig()
     
     print("\n=====================================================")
     print("                   TEST SUMMARY                      ")

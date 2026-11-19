@@ -57,6 +57,16 @@ HF_TOKEN = (os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN") or
 FREE_VIDEO_PROVIDER = os.environ.get("FREE_VIDEO_PROVIDER", "auto").strip().lower()  # auto | i2v | t2v | kenburns
 LOCAL_COMFY_URL = os.environ.get("LOCAL_COMFY_URL", "").strip().rstrip("/")
 VIDEO_AI_CLIPS_MAX = max(0, int(os.environ.get("VIDEO_AI_CLIPS_MAX", "8")))
+ENABLE_MOTION_GRAPHICS = os.environ.get("ENABLE_MOTION_GRAPHICS", "1") == "1"
+ENABLE_PARTICLE_VFX = os.environ.get("ENABLE_PARTICLE_VFX", "1") == "1"
+ENABLE_TRANSITIONS = os.environ.get("ENABLE_TRANSITIONS", "1") == "1"
+ENABLE_AUDIO_MASTER = os.environ.get("ENABLE_AUDIO_MASTER", "1") == "1"
+EXPORT_SYNFIG_PROJECT = os.environ.get("EXPORT_SYNFIG_PROJECT", "0") == "1"
+
+try:
+    import motion_engine
+except ImportError:
+    motion_engine = None
 
 try:
     from raptar_agent import RaptarAgent, LANGUAGES, ANIMATED_STYLES
@@ -1176,9 +1186,8 @@ def _procedural_svg(style: str, idx: int) -> str:
 </svg>'''
 
 
-def _gemini_svg_illustration(prompt: str, dest: Path, style: str = "", idx: int = 0) -> bool:
-    """Uses Gemini 4 Hydrogen to synthesize rich multi-layered SVG vector artwork, rendered to PNG via FFmpeg."""
-    svg_text = ""
+def _gemini_svg_markup(prompt: str, style: str = "", idx: int = 0) -> str:
+    """Synthesizes multi-layered SVG markup via Gemini 4 Hydrogen (returns empty string if unavailable)."""
     if GEMINI_API_KEY and not OFFLINE and "svg" not in _DEAD_GEMINI:
         svg_prompt = f"""Generate a vivid, layered, expressive SVG scene illustration (no text elements!) matching:
 Scene: {prompt[:400]}
@@ -1197,14 +1206,17 @@ Return ONLY raw valid <svg ...>...</svg> markup."""
                 raw = r.json()["candidates"][0]["content"]["parts"][0]["text"]
                 m = re.search(r"<svg[\s\S]*?</svg>", raw)
                 if m and "<text" not in m.group(0).lower():
-                    svg_text = m.group(0)
+                    return m.group(0)
             elif r.status_code == 429:
                 _DEAD_GEMINI.add("svg")
         except Exception:
             pass
+    return ""
 
-    if not svg_text:
-        svg_text = _procedural_svg(style, idx)
+
+def _gemini_svg_illustration(prompt: str, dest: Path, style: str = "", idx: int = 0) -> bool:
+    """Uses Gemini 4 Hydrogen to synthesize rich multi-layered SVG vector artwork, rendered to PNG via FFmpeg."""
+    svg_text = _gemini_svg_markup(prompt, style=style, idx=idx) or _procedural_svg(style, idx)
 
     svg_path = dest.with_suffix(".svg")
     try:
@@ -1504,7 +1516,9 @@ def _t2v_free(motion_prompt: str, dest: Path) -> str | None:
     return None
 
 
-def _fx_filter_chain(fx: str) -> str:
+def _fx_filter_chain(fx: str, style: str = "") -> str:
+    if motion_engine is not None:
+        return motion_engine.get_grade_filter(fx, style=style)
     if fx == "eerie_vignette":
         return "eq=contrast=1.12:saturation=0.82,vignette=angle=PI/4"
     if fx in ("warm_glow", "sparkles", "golden_glow"):
@@ -1512,6 +1526,25 @@ def _fx_filter_chain(fx: str) -> str:
     if fx == "vibrant":
         return "eq=contrast=1.08:saturation=1.28"
     return "eq=contrast=1.05:saturation=1.12"
+
+
+def _apply_optional_particle_vfx(clip_path: Path, total: float, style: str, fx: str, idx: int) -> None:
+    """Composites subtle Effekseer-style particle VFX onto a rendered clip when enabled."""
+    if not (ENABLE_PARTICLE_VFX and motion_engine is not None):
+        return
+    if CURRENT_FORMAT == "long" or not clip_path.exists():
+        return
+    tmp_out = clip_path.with_suffix(".vfx.mp4")
+    try:
+        ok = motion_engine.composite_particles_onto_video(
+            clip_path, tmp_out, W, H, total, style=style, fx=fx, idx=idx, fps=FPS
+        )
+        if ok and _valid_video(tmp_out):
+            tmp_out.replace(clip_path)
+        else:
+            tmp_out.unlink(missing_ok=True)
+    except Exception:
+        tmp_out.unlink(missing_ok=True)
 
 
 def _normalize_ai_video_clip(raw_clip: Path, out: Path, total: float, fx: str = "cinematic") -> None:
@@ -1598,18 +1631,44 @@ def make_animated_visual(idx: int, sc: dict, total: float, style: str = "") -> P
     fx = sc.get("fx") or ("eerie_vignette" if style == "horror" else ("warm_glow" if "myth" in style else "vibrant"))
     out = WORK / f"story_{idx}.mp4"
 
+    if EXPORT_SYNFIG_PROJECT and motion_engine is not None and idx == 0:
+        try:
+            motion_engine.export_synfig_sif(
+                OUT / "scene_0.sif", W, H, total, fps=FPS, style=style or "animated_myth",
+                title=sc.get("heading") or sc.get("text", "RAPTAR Scene")[:48],
+            )
+        except Exception:
+            pass
+
+    # 0. Explicit Synfig CLI or SVG/Theatre.js Motion Graphics mode (and fast rich Offline mode)
+    if motion_engine is not None and FREE_VIDEO_PROVIDER == "synfig":
+        sif_tmp = WORK / f"scene_{idx}.sif"
+        motion_engine.export_synfig_sif(sif_tmp, W, H, total, fps=FPS, style=style or "animated_myth")
+        if motion_engine.render_via_synfig_cli(sif_tmp, out, W, H, fps=FPS):
+            return out
+
+    if motion_engine is not None and ENABLE_MOTION_GRAPHICS and (OFFLINE or FREE_VIDEO_PROVIDER == "svg_motion"):
+        base_svg = "" if OFFLINE else _gemini_svg_markup(full_prompt, style=style, idx=idx)
+        if motion_engine.render_animated_svg_scene(
+            out, W, H, total, fps=FPS, style=style or "animated_myth",
+            idx=idx, motion=motion, fx=fx, base_svg=base_svg or None,
+            enable_particles=ENABLE_PARTICLE_VFX,
+        ):
+            return out
+
     # 1. Live Real AI Video Generation (Image-to-Video for character consistency -> Text-to-Video backup)
     pre_keyframe: Path | None = None
-    if not OFFLINE and FREE_VIDEO_PROVIDER != "kenburns" and _AI_VIDEO_COUNT < VIDEO_AI_CLIPS_MAX:
+    if not OFFLINE and FREE_VIDEO_PROVIDER not in ("kenburns", "svg_motion") and _AI_VIDEO_COUNT < VIDEO_AI_CLIPS_MAX:
         motion_prompt = _build_motion_prompt(sc, style=style)
         raw_ai = WORK / f"ai_raw_{idx}.mp4"
         if FREE_VIDEO_PROVIDER in ("auto", "i2v"):
             kf = WORK / f"kf_{idx}.png"
-            if gen_image(full_prompt, kf, style=style, idx=idx):
+            if (_gemini_image(full_prompt, kf) and _valid_image(kf)) or (_pollinations(full_prompt, kf) and _valid_image(kf)):
                 pre_keyframe = kf
                 if _i2v_free(kf, motion_prompt, raw_ai):
                     _AI_VIDEO_COUNT += 1
                     _normalize_ai_video_clip(raw_ai, out, total, fx=fx)
+                    _apply_optional_particle_vfx(out, total, style=style, fx=fx, idx=idx)
                     raw_ai.unlink(missing_ok=True)
                     kf.unlink(missing_ok=True)
                     return out
@@ -1617,6 +1676,7 @@ def make_animated_visual(idx: int, sc: dict, total: float, style: str = "") -> P
             if _t2v_free(motion_prompt, raw_ai):
                 _AI_VIDEO_COUNT += 1
                 _normalize_ai_video_clip(raw_ai, out, total, fx=fx)
+                _apply_optional_particle_vfx(out, total, style=style, fx=fx, idx=idx)
                 raw_ai.unlink(missing_ok=True)
                 if pre_keyframe:
                     pre_keyframe.unlink(missing_ok=True)
@@ -1632,8 +1692,8 @@ def make_animated_visual(idx: int, sc: dict, total: float, style: str = "") -> P
         shot1, shot2 = WORK / f"anim_{idx}_a.mp4", WORK / f"anim_{idx}_b.mp4"
         alt_motion = "dolly_pulse" if motion != "dolly_pulse" else "zoom_out"
 
-        ok1 = img1.exists() and _valid_image(img1) or gen_image(full_prompt + ", establishing wide angle", img1, style=style, idx=idx * 2)
-        ok2 = gen_image(full_prompt + ", expressive cinematic close-up reaction", img2, style=style, idx=idx * 2 + 1)
+        ok1 = (img1.exists() and _valid_image(img1)) or (_gemini_image(full_prompt + ", establishing wide angle", img1) and _valid_image(img1)) or (_pollinations(full_prompt + ", establishing wide angle", img1) and _valid_image(img1))
+        ok2 = (_gemini_image(full_prompt + ", expressive cinematic close-up reaction", img2) and _valid_image(img2)) or (_pollinations(full_prompt + ", expressive cinematic close-up reaction", img2) and _valid_image(img2))
         if ok1 and ok2:
             _animate_frame_to_video(img1, shot1, half1, motion=motion, fx=fx)
             _animate_frame_to_video(img2, shot2, half2, motion=alt_motion, fx=fx)
@@ -1642,15 +1702,36 @@ def make_animated_visual(idx: int, sc: dict, total: float, style: str = "") -> P
             lst = WORK / f"anim_segs_{idx}.txt"
             lst.write_text(f"file '{shot1.name}'\nfile '{shot2.name}'\n", encoding="utf-8")
             run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(lst), "-c", "copy", str(out)])
+            _apply_optional_particle_vfx(out, total, style=style, fx=fx, idx=idx)
             shot1.unlink(missing_ok=True)
             shot2.unlink(missing_ok=True)
             return out
 
-    # 3. Single-shot Keyframe / SVG 2.5D Ken Burns guaranteed fallback
+    # 3. Single-shot AI Keyframe with Ken Burns + Particle VFX, or true multi-frame SVG Motion Graphics fallback
     img = pre_keyframe if (pre_keyframe and pre_keyframe.exists()) else WORK / f"img_{idx}.png"
-    if not (img.exists() and _valid_image(img)):
-        if not gen_image(full_prompt, img, style=style, idx=idx):
-            return None
+    has_raster = img.exists() and _valid_image(img)
+    if not has_raster and not OFFLINE:
+        has_raster = (_gemini_image(full_prompt, img) and _valid_image(img)) or (_pollinations(full_prompt, img) and _valid_image(img))
+
+    if has_raster:
+        _animate_frame_to_video(img, out, total, motion=motion, fx=fx)
+        _apply_optional_particle_vfx(out, total, style=style, fx=fx, idx=idx)
+        img.unlink(missing_ok=True)
+        return out
+
+    # True multi-frame Theatre.js/SVG.js animated vector scene (auto-rigging Gemini SVG if available)
+    if motion_engine is not None and ENABLE_MOTION_GRAPHICS:
+        base_svg = "" if OFFLINE else _gemini_svg_markup(full_prompt, style=style, idx=idx)
+        if motion_engine.render_animated_svg_scene(
+            out, W, H, total, fps=FPS, style=style or "animated_myth",
+            idx=idx, motion=motion, fx=fx, base_svg=base_svg or None,
+            enable_particles=ENABLE_PARTICLE_VFX,
+        ):
+            return out
+
+    # Final legacy SVG raster fallback
+    if not _gemini_svg_illustration(full_prompt, img, style=style, idx=idx):
+        return None
     _animate_frame_to_video(img, out, total, motion=motion, fx=fx)
     img.unlink(missing_ok=True)
     return out
@@ -1766,7 +1847,7 @@ def build_scene(idx: int, text: str, visual: Path, audio: Path, dur: float, font
         "ffmpeg", "-y", "-stream_loop", "-1", "-i", str(visual), "-i", str(audio),
         "-t", f"{total:.3f}",
         "-vf", ",".join(filters) or "null",
-        "-af", f"apad,atrim=0:{total:.3f}",
+        "-af", motion_engine.build_audio_master_filter(total) if (ENABLE_AUDIO_MASTER and motion_engine is not None) else f"apad,atrim=0:{total:.3f}",
         "-map", "0:v:0", "-map", "1:a:0",
         "-r", str(FPS), "-vsync", "cfr", "-video_track_timescale", "90000",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "22", "-pix_fmt", "yuv420p",
@@ -1790,6 +1871,19 @@ def make_thumbnail(video: Path, title: str, font: str) -> Path:
     run(["ffmpeg", "-y", "-ss", f"{max(0.5, vid_dur * 0.3):.2f}", "-i", str(video),
          "-frames:v", "1", "-vf", vf, "-q:v", "3", str(out)])
     return out
+
+
+# ------------------------------------------------------------ Scene Joining (Natron xfade + Lossless Concat)
+def _join_scenes(scenes: list[Path], out_path: Path, fmt: str, style: str = "", list_name: str = "list.txt") -> bool:
+    """Joins scenes with Natron-style xfade+acrossfade for Shorts/Reels, or lossless concat for long-form."""
+    if ENABLE_TRANSITIONS and motion_engine is not None and fmt != "long" and 2 <= len(scenes) <= 16:
+        if motion_engine.join_scenes_with_transitions(scenes, out_path, style=style or "animated_myth", fps=FPS):
+            return True
+    listfile = WORK / list_name
+    listfile.write_text("".join(f"file '{s.name}'\n" for s in scenes), encoding="utf-8")
+    run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(listfile),
+         "-c", "copy", "-movflags", "+faststart", str(out_path)])
+    return False
 
 
 # ------------------------------------------------------------ Audio + Visual rendering & Multi-Language Dubbing
@@ -1823,11 +1917,8 @@ def _render_language_variant(
         scenes.append(scene_vid)
         elapsed += dur + 0.25
 
-    listfile = WORK / f"list_{lang}.txt"
-    listfile.write_text("".join(f"file '{s.name}'\n" for s in scenes), encoding="utf-8")
     final = out_dir / "video.mp4"
-    run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(listfile),
-         "-c", "copy", "-movflags", "+faststart", str(final)])
+    _join_scenes(scenes, final, fmt=fmt, style=script_style, list_name=f"list_{lang}.txt")
 
     desc = script["description"].strip()
     if fmt == "long":
@@ -1947,11 +2038,8 @@ def main() -> None:
         elapsed += dur + 0.25
 
     print("4/4 Joining scenes...")
-    listfile = WORK / "list.txt"
-    listfile.write_text("".join(f"file '{s.name}'\n" for s in scenes), encoding="utf-8")
     final = OUT / "video.mp4"
-    run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(listfile),
-         "-c", "copy", "-movflags", "+faststart", str(final)])
+    used_transitions = _join_scenes(scenes, final, fmt=fmt, style=script_style, list_name="list.txt")
 
     desc = script["description"].strip()
     if fmt == "long":
@@ -1965,6 +2053,9 @@ def main() -> None:
         "description": desc, "hashtags": script["hashtags"],
         "category": script.get("category"), "style": script.get("style"),
         "animated": use_animation, "ai_video_clips": _AI_VIDEO_COUNT,
+        "motion_engine": bool(motion_engine),
+        "transitions_applied": bool(used_transitions),
+        "particle_vfx": bool(ENABLE_PARTICLE_VFX and motion_engine is not None and fmt != "long"),
         "source": "trend" if idea else "category",
     }
     (OUT / "metadata.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")

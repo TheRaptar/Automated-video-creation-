@@ -26,3 +26,41 @@ Evaluated and integrated headless-compatible patterns from the 10 open-source Gi
 - `ENABLE_TRANSITIONS="1"` — Applies Natron-style FFmpeg `xfade` + `acrossfade` transitions between Short/Animated/Story scenes (preserves lossless `concat` on `long` format for exact chapter timestamps).
 - `ENABLE_AUDIO_MASTER="1"` — Applies voice highpass + gentle dynamics compression (`acompressor`) on narration.
 - `EXPORT_SYNFIG_PROJECT="0"` — Set to `"1"` to also write `output/scene_0.sif` editable in Synfig Studio.
+
+---
+
+## Free Open-Source Story Studio & Global Trend Engine (`story_studio.py`)
+
+Modular, hardware-aware, checkpointable multi-character story production pipeline (`5s` to `10m+`, `9:16` / `16:9` / `1:1`):
+
+- **`hardware_manager.py`**: Detects CPU, RAM, NVIDIA/AMD/Apple GPU, VRAM, Colab/Kaggle, and local tools (`ffmpeg`, `blender`, `synfig`, `piper`, `comfyui`) and recommends optimal quantized open-weight models.
+- **`character_manager.py`**: Persists `CharacterBible` profiles with locked appearances/outfits, deterministic seeds, and distinct multi-character neural voices across English, Hindi, Tamil, and 11+ languages.
+- **`audio_studio.py`**: Multi-character dialogue synthesis (`edge-tts` + optional local `OHF-Voice/piper1-gpl`), 100% copyright-free procedural Foley SFX & ducked BGM beds, and RMS audio lip-sync envelope extraction.
+- **`video_backends.py`**: Aspect-ratio presets (`9:16`, `16:9`, `1:1`), real ComfyUI API workflow client (`LOCAL_COMFY_URL` + `LOCAL_COMFY_WORKFLOW`), last-frame shot continuation, CPU-native 2D articulated talking puppets with real audio RMS lip-sync, and optional GPU lip-sync CLI hook (`LIPSYNC_CMD` for MuseTalk/LatentSync).
+- **`trend_discovery.py`**: Global multi-source public trend discovery (Google Trends RSS across all regions, Google News RSS, multi-language Wikipedia Pageviews, Hacker News, optional YouTube Data API v3) with 15 categories, freshness/growth scoring, caching (`hourly`/`daily`/`weekly`), deduplication, and originality/safety filters.
+- **`story_studio.py`**: Checkpointable multi-scene story orchestrator with automatic retries, `--resume` recovery, and `metrics.json` telemetry.
+
+### Quick CLI Examples
+
+```bash
+cd Automated-video-creation
+
+# 1. Inspect local hardware & open-source model recommendations
+python3 hardware_manager.py
+
+# 2. Discover live global trends across all regions
+python3 trend_discovery.py
+
+# 3. Generate a 60s 9:16 multi-character animated story in Hindi
+python3 story_studio.py --idea "A proud white lion and his cub visit a golden tower" \
+  --style animal_story --duration 60 --aspect 9:16 --lang hi
+
+# 4. Auto-discover a live trend and convert it into an original 2-minute 16:9 story
+python3 story_studio.py --from-trend --region ALL --category fantasy_adventure \
+  --style fantasy --duration 120 --aspect 16:9 --lang en
+
+# 5. Resume an interrupted long-form project without re-rendering completed scenes
+python3 story_studio.py --resume projects/<project_id>
+```
+
+See [`OPEN_SOURCE_RESEARCH_REPORT.md`](./OPEN_SOURCE_RESEARCH_REPORT.md) for the full verified GitHub repository matrix, licenses, VRAM requirements, and known limitations.

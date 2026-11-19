@@ -613,6 +613,184 @@ def test_particles_compositor_transitions_and_synfig():
         shutil.rmtree(test_work, ignore_errors=True)
 
 
+@test("8.1 Hardware-Aware Detection & Model Recommendation Engine")
+def test_hardware_manager():
+    import hardware_manager
+    hw = hardware_manager.detect_hardware()
+    d = hw.to_dict()
+    assert d["cpu_cores"] >= 1 and d["ram_gb"] > 0 and d["disk_free_gb"] > 0
+    assert d["tier"] in ("cpu_ci", "cpu_local", "gpu_low_vram", "gpu_mid_vram", "gpu_high_vram")
+    assert "video" in d["recommendations"] and "lipsync" in d["recommendations"]
+    assert d["tools"].get("ffmpeg") is True
+    return {"tier": d["tier"], "cores": d["cpu_cores"], "ram_gb": d["ram_gb"], "gpu": d["gpu_vendor"]}
+
+
+@test("8.2 CharacterBible Consistency Locking & Multi-Language Multi-Voice Casting")
+def test_character_bible():
+    from character_manager import CharacterBible
+    import shutil
+    test_dir = SCRIPT_DIR / "test_char_work"
+    test_dir.mkdir(exist_ok=True)
+    try:
+        for lang in ("en", "hi", "ta"):
+            bible = CharacterBible(project_dir=test_dir, lang=lang)
+            dad = bible.register("Sheru", archetype="lion", gender="male", age_group="adult", voice_role="male_deep",
+                                 appearance_lock="white lion with gold sunglasses", outfit_lock="white three-piece suit")
+            cub = bible.register("Chotu", archetype="cub", gender="male", age_group="child", voice_role="child",
+                                 appearance_lock="small white lion cub", outfit_lock="black mini tuxedo")
+            host = bible.register("Meera", archetype="human", gender="female", age_group="adult", voice_role="female")
+            assert dad.voice_pitch != cub.voice_pitch, f"Child and adult lion voices should differ in {lang}"
+            assert host.voice_id != dad.voice_id or host.voice_pitch != dad.voice_pitch
+            prompt, seed = bible.build_consistent_shot_prompt("3D Pixar", "Walk into golden lobby", ["Sheru", "Chotu"], "Dubai tower", aspect_ratio="9:16")
+            assert "white lion with gold sunglasses" in prompt and "black mini tuxedo" in prompt and seed == dad.seed
+        saved = bible.save(test_dir / "characters.json")
+        loaded = CharacterBible.load(saved)
+        assert len(loaded.characters) == 3 and loaded.get("Sheru").seed == dad.seed
+        return {"languages_tested": ["en", "hi", "ta"], "characters_persisted": len(loaded.characters)}
+    finally:
+        shutil.rmtree(test_dir, ignore_errors=True)
+
+
+@test("8.3 Multi-Character Audio Studio (Dialogue Mixing, Procedural SFX, BGM & RMS Lip-Sync)")
+def test_audio_studio():
+    import audio_studio
+    from character_manager import CharacterBible
+    import shutil
+    test_dir = SCRIPT_DIR / "test_audio_work"
+    test_dir.mkdir(exist_ok=True)
+    try:
+        bible = CharacterBible(project_dir=test_dir, lang="hi")
+        bible.register("Sheru", archetype="lion", gender="male", age_group="adult", voice_role="male_deep")
+        bible.register("Chotu", archetype="cub", gender="male", age_group="child", voice_role="child")
+
+        # Verify procedural copyright-free SFX & BGM synthesis
+        for sfx_name in ("whoosh", "impact_boom", "shock_hit", "footsteps", "sparkle"):
+            sfx_p = audio_studio.synthesize_sfx(sfx_name, test_dir / f"{sfx_name}.wav")
+            assert sfx_p is not None and sfx_p.exists() and sfx_p.stat().st_size > 1000, f"SFX failed: {sfx_name}"
+
+        out_mix = test_dir / "scene_mix.mp3"
+        dur, turns = audio_studio.build_scene_dialogue_and_mix(
+            dialogue_lines=[
+                {"speaker": "Chotu", "text": "Papa, I want to buy the tallest tower!", "emotion": "happy"},
+                {"speaker": "Sheru", "text": "Just that much son? Come with me!", "emotion": "confident"},
+            ],
+            bible=bible,
+            work_dir=test_dir,
+            scene_idx=0,
+            out_audio=out_mix,
+            lang="hi",
+            style="animated_comedy",
+            sfx_cues=["whoosh", "shock_hit"],
+            enable_bgm=True,
+            offline=True,
+        )
+        assert out_mix.exists() and dur >= 2.0 and len(turns) == 2
+        assert turns[1].start_sec >= turns[0].end_sec - 0.05
+        rms = audio_studio.extract_rms_lip_envelope(out_mix, fps=15, duration=dur)
+        assert len(rms) >= 20 and max(rms) > 0.2, f"RMS lip-sync envelope failed: max={max(rms) if rms else 0}"
+        return {"mix_dur": round(dur, 2), "turns": len(turns), "rms_frames": len(rms), "rms_peak": round(max(rms), 2)}
+    finally:
+        shutil.rmtree(test_dir, ignore_errors=True)
+
+
+@test("8.4 Global Multi-Source Trend Discovery Engine (Freshness, Categories, Deduplication & Live RSS)")
+def test_trend_discovery_engine():
+    import trend_discovery
+    import shutil
+    test_dir = SCRIPT_DIR / "test_trend_work"
+    test_dir.mkdir(exist_ok=True)
+    try:
+        eng = trend_discovery.TrendDiscoveryEngine(cache_path=test_dir / "cache.json", cadence="hourly")
+        # 1. Offline ranking & deduplication check
+        off_items = eng.discover(region="ALL", lang="en", category="funny_animals", limit=5, offline=True)
+        assert len(off_items) >= 2 and off_items[0].combined_score >= off_items[-1].combined_score
+        dedup_items = eng.discover(region="ALL", lang="en", seen_topics=[off_items[0].title], limit=5, offline=True)
+        assert all(it.title != off_items[0].title for it in dedup_items), "Deduplication failed"
+
+        # 2. Live public RSS verification (Google Trends + Google News + Wikipedia)
+        live_items = eng.discover(region="ALL", lang="en", limit=6, offline=False, force_refresh=True)
+        assert len(live_items) >= 3, f"Expected live public trends, got {len(live_items)}"
+        assert all(it.original_story_angle and it.recommended_seconds >= 25 for it in live_items)
+        sources = sorted(set(s for it in live_items for s in it.sources_seen))
+        return {"offline_count": len(off_items), "live_count": len(live_items), "live_sources": sources[:6]}
+    finally:
+        shutil.rmtree(test_dir, ignore_errors=True)
+
+
+@test("8.5 End-to-End Checkpointable Animated Story Studio (9:16 + 1:1, 2D Lip-Sync, Continuation & --resume)")
+def test_story_studio_e2e_and_resume():
+    import story_studio
+    import make_video
+    import video_backends
+    import shutil
+    proj_dir = SCRIPT_DIR / "test_studio_proj"
+    sq_dir = SCRIPT_DIR / "test_studio_sq"
+    shutil.rmtree(proj_dir, ignore_errors=True)
+    shutil.rmtree(sq_dir, ignore_errors=True)
+    try:
+        # 1. Full 9:16 multi-character trend-to-video story run
+        res1 = story_studio.produce_story_project(
+            idea="The White Lion and Little Cub Golden Tower",
+            style="animal_story",
+            target_seconds=10,
+            aspect="9:16",
+            quality="draft",
+            lang="en",
+            backend="puppet_2d",
+            from_trend=True,
+            project_dir=proj_dir,
+            offline=True,
+        )
+        v1 = Path(res1["video"])
+        assert v1.exists() and make_video._valid_video(v1)
+        assert res1["metadata"]["aspect_ratio"] == "9:16"
+        assert (proj_dir / "checkpoint.json").exists()
+        assert (proj_dir / "metrics.json").exists()
+        assert (proj_dir / "characters.json").exists()
+        assert (proj_dir / "thumbnail.jpg").exists()
+
+        # Verify last-frame extraction works on rendered video
+        lf = proj_dir / "test_last_frame.png"
+        assert video_backends.extract_last_frame(v1, lf), "Last-frame extraction failed"
+
+        # 2. Verify --resume skips already completed scenes cleanly (significantly faster)
+        res_resume = story_studio.produce_story_project(
+            idea="The White Lion and Little Cub Golden Tower",
+            style="animal_story",
+            target_seconds=10,
+            aspect="9:16",
+            quality="draft",
+            lang="en",
+            backend="puppet_2d",
+            project_dir=proj_dir,
+            offline=True,
+        )
+        assert res_resume["metrics"]["backends_used"] == {}, "Resume should skip already-rendered scenes!"
+        assert Path(res_resume["video"]).exists()
+
+        # 3. Verify 1:1 square export format
+        res_sq = story_studio.produce_story_project(
+            idea="Mini Square Sci-Fi Adventure",
+            style="action",
+            target_seconds=5,
+            aspect="1:1",
+            quality="draft",
+            lang="en",
+            backend="puppet_2d",
+            project_dir=sq_dir,
+            offline=True,
+        )
+        assert res_sq["metadata"]["resolution"] == "720x720" and Path(res_sq["video"]).exists()
+        return {
+            "vertical_dur": res1["metadata"]["actual_seconds"],
+            "resumed_sec": res_resume["metrics"]["total_runtime_sec"],
+            "square_res": res_sq["metadata"]["resolution"],
+        }
+    finally:
+        shutil.rmtree(proj_dir, ignore_errors=True)
+        shutil.rmtree(sq_dir, ignore_errors=True)
+
+
 if __name__ == "__main__":
     print("=====================================================")
     print("        RAPTAR TECHNICAL VERIFICATION SUITE         ")
@@ -635,6 +813,11 @@ if __name__ == "__main__":
     test_free_ai_video_engine()
     test_motion_engine_svg_and_keyframes()
     test_particles_compositor_transitions_and_synfig()
+    test_hardware_manager()
+    test_character_bible()
+    test_audio_studio()
+    test_trend_discovery_engine()
+    test_story_studio_e2e_and_resume()
     
     print("\n=====================================================")
     print("                   TEST SUMMARY                      ")

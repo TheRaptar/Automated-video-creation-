@@ -141,6 +141,12 @@ def _signals_text(sig: dict) -> str:
     if yt.get("shorts"):
         parts.append("Top Shorts of the last 7 days in our niches: " + "; ".join(
             f"[{s['niche']}] {s['title']} ({s['views']:,} views)" for s in yt["shorts"]))
+    if sig.get("news"):
+        parts.append("Fresh Google News global headlines: " + "; ".join(
+            f"{n['title']} ({n.get('region', 'US')})" for n in sig["news"][:12]))
+    if sig.get("hn"):
+        parts.append("Emerging Tech/Science discussions (Hacker News): " + "; ".join(
+            f"{h['title']} ({h.get('traffic', '')})" for h in sig["hn"][:8]))
     return "\n".join(parts)
 
 
@@ -191,9 +197,16 @@ def ensure_fresh(state: dict, llm_json, categories: list[str]) -> None:
         return
     print("  Researching today's trends...")
     update_performance(state)
+    news_items, hn_items = [], []
+    try:
+        import trend_discovery
+        news_items = trend_discovery.fetch_google_news_rss(geo=GEOS[0] if GEOS else "US", limit=12)
+        hn_items = trend_discovery.fetch_hackernews_top(limit=6)
+    except Exception:
+        pass
     sig = {"google": {g: google_trends(g) for g in GEOS}, "wiki": wikipedia_top(),
-           "youtube": youtube_signals(categories)}
-    if not (any(sig["google"].values()) or sig["wiki"] or sig["youtube"]):
+           "youtube": youtube_signals(categories), "news": news_items, "hn": hn_items}
+    if not (any(sig["google"].values()) or sig["wiki"] or sig["youtube"] or sig["news"]):
         print("  No trend signals reachable - using normal topic selection.")
         return
     data = analyze(sig, llm_json, categories)

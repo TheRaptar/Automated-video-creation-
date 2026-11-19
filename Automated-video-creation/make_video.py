@@ -88,7 +88,7 @@ ORIENT = "portrait"
 CURRENT_FORMAT = "short"
 
 
-def configure(fmt: str) -> None:
+def configure(fmt: str, aspect: str = "") -> None:
     global W, H, CAPTIONS, CLIP_LEN, SIZE_ORDER, ORIENT, CURRENT_FORMAT
     CURRENT_FORMAT = fmt
     if fmt == "long":
@@ -99,6 +99,12 @@ def configure(fmt: str) -> None:
         W, H, CAPTIONS, ORIENT = 1080, 1920, True, "portrait"
         CLIP_LEN = float(os.environ.get("CLIP_SECONDS", "4.5"))
         SIZE_ORDER = ("large", "medium", "small", "tiny")
+    if aspect == "1:1":
+        W, H, ORIENT = 1080, 1080, "square"
+    elif aspect == "16:9":
+        W, H, ORIENT = 1920, 1080, "landscape"
+    elif aspect == "9:16":
+        W, H, ORIENT = 1080, 1920, "portrait"
 
 
 def pick_seconds(env_name: str, default: str) -> int:
@@ -1469,18 +1475,26 @@ def _wan21_fast_i2v(img_path: Path, motion_prompt: str, dest: Path) -> bool:
 
 
 def _comfyui_video(img_path: Path | None, motion_prompt: str, dest: Path) -> bool:
-    """Optional self-hosted local GPU ComfyUI endpoint (100% free unlimited local Wan 2.2 / LTX-2 runner)."""
+    """Optional self-hosted local/Colab/Kaggle GPU ComfyUI endpoint (Wan 2.2 / LTX-2 / FramePack)."""
     if not LOCAL_COMFY_URL or "comfyui" in _VIDEO_DEAD:
         return False
     try:
-        r = requests.get(f"{LOCAL_COMFY_URL}/system_stats", timeout=5)
-        if not r.ok:
+        import video_backends
+        client = video_backends.ComfyUIBackend(base_url=LOCAL_COMFY_URL)
+        if not client.is_available():
             _VIDEO_DEAD.add("comfyui")
             return False
+        return client.run_workflow(
+            prompt_text=motion_prompt,
+            out_path=dest,
+            width=W,
+            height=H,
+            seed=random.randint(1, 999999),
+            input_image=img_path,
+        )
     except Exception:
         _VIDEO_DEAD.add("comfyui")
         return False
-    return False
 
 
 def _i2v_free(img_path: Path, motion_prompt: str, dest: Path) -> str | None:
@@ -1945,9 +1959,11 @@ def main() -> None:
                     help="Primary language code (en, ta, hi, es, fr, pt, de, ja, ko, ar, id, or 'auto')")
     ap.add_argument("--dub", default=os.environ.get("DUB_LANGUAGES", ""),
                     help="Comma-separated extra languages to dub from the same animated visual track")
+    ap.add_argument("--aspect", choices=["", "9:16", "16:9", "1:1"], default=os.environ.get("VIDEO_ASPECT", ""),
+                    help="Optional export aspect ratio override (9:16, 16:9, or 1:1)")
     args = ap.parse_args()
     fmt, topic = args.format, " ".join(args.topic).strip() or None
-    configure(fmt)
+    configure(fmt, aspect=args.aspect)
     global _AI_VIDEO_COUNT
     _AI_VIDEO_COUNT = 0
 

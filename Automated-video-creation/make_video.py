@@ -41,6 +41,16 @@ try:
 except ImportError:
     pass
 
+try:
+    import growth_optimizer
+except Exception:
+    growth_optimizer = None
+
+try:
+    import audio_studio
+except Exception:
+    audio_studio = None
+
 OFFLINE = os.environ.get("OFFLINE_TEST") == "1"
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
@@ -516,7 +526,12 @@ def generate_short(topic, history, state, lang: str = "en") -> dict:
                  "search_terms": ["sunrise"], "image_prompt": "finished grand ocean bridge sunrise"},
             ]})
 
-    lo, words = max(5, total // 9), int(total * 2.5)
+    lo, words = max(7, min(11, total // 5)), int(total * 2.6)
+    hook_type, hook_meta = (
+        growth_optimizer.pick_hook_archetype(state)
+        if growth_optimizer
+        else ("contradiction", {"label": "Pattern Interrupt", "instruction": "Open with a surprising contradiction in under 9 words."})
+    )
     topic_line, category = _topic_line(topic, history, state, False)
     hint = state.get("_style_hint")
     if hint in STYLES:
@@ -553,6 +568,7 @@ Return ONLY JSON:
   "characters": "one English sentence describing consistent character design",
   "voice_profile": {{"voice": "{profile['voice']}", "rate": "{profile['rate']}"}},
   "subtitle_color": "{profile['subtitle_color']}",
+  "engagement_cta": "short localized debate question in {lang_meta['name']} driving comments & saves",
   "scenes": [{{
     "text": "spoken narration in {lang_meta['name']}",
     "search_terms": ["english visual query 1", "english visual query 2"],
@@ -563,9 +579,10 @@ Return ONLY JSON:
   }}]
 }}
 Rules:
-- {lo} to {lo + 2} scenes, about {total} seconds (~{int(words * 0.9)} words total).
-- Scene 1 is an instant scroll-stopping hook under 12 words.
-- Last scene ends with a compelling follow CTA in {lang_meta['name']}.
+- {lo} to {lo + 2} crisp fast-paced scenes (~3.0 to 4.5s per visual cut), about {total} seconds (~{int(words * 0.9)} words total).
+- Scene 1 MUST execute hook archetype '{hook_meta['label']}': {hook_meta['instruction']}
+- Seamless Loop Bridge: end the last scene so it naturally loops back into Scene 1's opening hook.
+- Put a localized debate/opinion question in "engagement_cta" to spark comments, saves, and shares.
 - No text, watermarks, or letters requested inside image_prompt."""
 
     data = llm_json(prompt, rounds=2, valid=_valid_scenes)
@@ -582,6 +599,8 @@ Rules:
     for sc, t in zip(script["scenes"], new):
         sc["text"] = t
     script.update(category=category, style=style_key, language=lang,
+                  hook_type=hook_type,
+                  engagement_cta=str(data.get("engagement_cta") or "").strip(),
                   target_audience=profile["target_audience"],
                   voice_profile=script.get("voice_profile", {"voice": profile["voice"], "rate": profile["rate"]}),
                   subtitle_color=profile.get("subtitle_color", "0x00E5FF"),
@@ -625,7 +644,12 @@ def generate_story(topic, history, state, lang: str = "en", animated: bool = Fal
                  "camera_motion": "zoom_out", "fx": "cinematic", "search_terms": ["golden sunrise landscape"]},
             ]})
 
-    n_lo = max(6, total // 7)
+    n_lo = max(7, min(11, total // 5))
+    hook_type, hook_meta = (
+        growth_optimizer.pick_hook_archetype(state)
+        if growth_optimizer
+        else ("countdown_twist", {"label": "Urgent Stakes", "instruction": "Open at peak tension in under 9 words."})
+    )
     prompt = f"""You are a world-class AI Animation Director creating viral animated Instagram Reels & YouTube Shorts.
 Narration Language: {lang_meta['name']} ({lang}) — Write "title", "description", "hashtags", and all narration "text" natively in {lang_meta['name']}.
 Visual Prompts: Write all "image_prompt" and "search_terms" strictly in ENGLISH.
@@ -655,8 +679,10 @@ Return ONLY JSON:
   }}]
 }}
 Rules:
-- {n_lo} to {n_lo + 2} scenes totaling ~{total} seconds of narration.
-- Arc: 1.5s scroll-stopping hook, escalating comedy/wonder/drama, emotional turning point, unforgettable climax, and CTA in {lang_meta['name']}.
+- {n_lo} to {n_lo + 2} fast-paced visual scenes (~3.0 to 4.5s per cut) totaling ~{total} seconds of narration.
+- Scene 1 MUST execute hook archetype '{hook_meta['label']}': {hook_meta['instruction']}
+- Arc: 1.5s scroll-stop hook -> rapid escalation -> emotional twist -> unforgettable payoff -> seamless loop bridge back to Scene 1.
+- Include an optional "engagement_cta" field with a short debate/opinion question in {lang_meta['name']} to drive comments & saves.
 - Keep image_prompt strictly free of any text, words, letters, logos, or watermarks."""
 
     data = llm_json(prompt, rounds=2, valid=lambda d: _valid_scenes(d, 5))
@@ -674,6 +700,8 @@ Rules:
     for sc in script["scenes"]:
         sc["image_prompt"] = str(sc.get("image_prompt") or sc["text"])
     script.update(category=category, style=style_key, language=lang,
+                  hook_type=hook_type,
+                  engagement_cta=str(data.get("engagement_cta") or "").strip(),
                   target_audience=profile["target_audience"],
                   voice_profile=script.get("voice_profile", {"voice": profile["voice"], "rate": profile["rate"]}),
                   subtitle_color=profile.get("subtitle_color", "0x00E5FF"),
@@ -872,6 +900,8 @@ Return ONLY JSON: {{"scenes": [{{"text": "...", "search_terms": ["sunset horizon
 
 # ------------------------------------------------------------ helpers: weighting + trend hints
 def weighted_choice(options: list, weights: dict):
+    if growth_optimizer is not None:
+        return growth_optimizer.select_bandit_choice(options, weights, explore_rate=0.25)
     return random.choices(options, weights=[max(0.1, float(weights.get(o, 1.0))) for o in options])[0]
 
 
@@ -1798,13 +1828,28 @@ def _color_to_ass_bgr(c: str) -> str:
     return "&H0000E5FF"
 
 
-def _write_ass_subtitles(idx: int, text: str, dur: float, font_path: str, style_meta: dict, heading: str = None, lang: str = "en") -> Path:
-    """Creates a styled ASS subtitle file supporting complex scripts (Tamil, Hindi, Arabic, CJK, Latin)."""
+def _write_ass_subtitles(
+    idx: int,
+    text: str,
+    dur: float,
+    font_path: str,
+    style_meta: dict,
+    heading: str = None,
+    lang: str = "en",
+    hook_banner: str = None,
+) -> Path:
+    """Creates a safe-zone styled ASS subtitle file with inline power-word highlights & optional 1.8s hook banner."""
     lang_meta = LANGUAGES.get(lang, LANGUAGES["en"])
     font_name = lang_meta.get("font_family") or Path(font_path).stem.split("-")[0]
     hl_bgr = _color_to_ass_bgr((style_meta or {}).get("subtitle_color", "0x00E5FF"))
-    fontsize = 78 if W == 1080 else 64
-    margin_v = int(H * 0.28) if W == 1080 else int(H * 0.12)
+    fontsize = 76 if W == 1080 else 64
+    if growth_optimizer is not None:
+        sz = growth_optimizer.get_safe_zone_margins(W, H)
+        margin_l, margin_r, margin_v, banner_v = sz["margin_l"], sz["margin_r"], sz["margin_v"], sz["banner_v"]
+    else:
+        margin_l, margin_r = 60, 140 if W == 1080 else 60
+        margin_v = int(H * 0.27) if W == 1080 else int(H * 0.12)
+        banner_v = int(H * 0.14) if W == 1080 else int(H * 0.08)
 
     header = f"""[Script Info]
 ScriptType: v4.00+
@@ -1815,9 +1860,10 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,{font_name},{fontsize},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,6,3,2,60,60,{margin_v},1
-Style: Highlight,{font_name},{fontsize},{hl_bgr},&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,6,3,2,60,60,{margin_v},1
+Style: Default,{font_name},{fontsize},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,6,3,2,{margin_l},{margin_r},{margin_v},1
+Style: Highlight,{font_name},{fontsize},{hl_bgr},&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,6,3,2,{margin_l},{margin_r},{margin_v},1
 Style: Heading,{font_name},52,&H00FFFFFF,&H000000FF,&H00000000,&HC0000000,-1,0,0,0,100,100,0,0,3,16,0,7,80,80,70,1
+Style: HookBanner,{font_name},60,&H0000E6FF,&H000000FF,&H00000000,&HB0000000,-1,0,0,0,100,100,0,0,3,14,0,8,{margin_l},{margin_l},{banner_v},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -1825,9 +1871,13 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     events = []
     if CAPTIONS and text.strip():
         for n, (chunk, start, end) in enumerate(caption_chunks(text, dur)):
-            display = chunk.upper() if lang in ("en", "es", "fr", "pt", "de", "id") else chunk
-            display = display.replace("{", "(").replace("}", ")").replace("\n", " ")
-            st_name = "Highlight" if n % 2 == 1 else "Default"
+            if growth_optimizer is not None:
+                display = growth_optimizer.format_power_word_ass(chunk, hl_bgr, lang=lang)
+                st_name = "Default" if r"{\c" in display else ("Highlight" if n % 3 == 1 else "Default")
+            else:
+                display = chunk.upper() if lang in ("en", "es", "fr", "pt", "de", "id") else chunk
+                display = display.replace("{", "(").replace("}", ")").replace("\n", " ")
+                st_name = "Highlight" if n % 2 == 1 else "Default"
             pop = r"{\fscx92\fscy92\t(0,70,\fscx100\fscy100)}"
             events.append(
                 f"Dialogue: 0,{_fmt_ass_time(start)},{_fmt_ass_time(end)},{st_name},,0,0,0,,{pop}{display}"
@@ -1837,7 +1887,13 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         events.append(
             f"Dialogue: 1,0:00:00.00,0:00:03.60,Heading,,0,0,0,,{safe_head}"
         )
-
+    if hook_banner and idx == 0:
+        safe_banner = hook_banner.replace("{", "(").replace("}", ")").replace("\n", " ").strip()
+        if safe_banner:
+            ban_end = _fmt_ass_time(min(dur, 1.85))
+            events.append(
+                f"Dialogue: 2,0:00:00.00,{ban_end},HookBanner,,0,0,0,,{safe_banner}"
+            )
     ass_path = WORK / f"sub_{idx}.ass"
     ass_path.write_text(header + "\n".join(events) + "\n", encoding="utf-8")
     return ass_path
@@ -1848,11 +1904,11 @@ def _drawtext(font: str, textfile: Path, style: str, enable: str) -> str:
             f":{style}:enable='{enable}'")
 
 
-def build_scene(idx: int, text: str, visual: Path, audio: Path, dur: float, font: str, heading=None, style_meta: dict = None, lang: str = "en") -> Path:
+def build_scene(idx: int, text: str, visual: Path, audio: Path, dur: float, font: str, heading=None, style_meta: dict = None, lang: str = "en", hook_banner: str = None) -> Path:
     total = dur + 0.25
     filters = []
-    if CAPTIONS or heading:
-        ass_path = _write_ass_subtitles(idx, text, dur, font, style_meta or {}, heading=heading, lang=lang)
+    if CAPTIONS or heading or hook_banner:
+        ass_path = _write_ass_subtitles(idx, text, dur, font, style_meta or {}, heading=heading, lang=lang, hook_banner=hook_banner)
         fonts_dir = ff_escape(Path(font).parent)
         filters.append(f"ass='{ff_escape(ass_path)}':fontsdir='{fonts_dir}'")
 
@@ -1870,8 +1926,21 @@ def build_scene(idx: int, text: str, visual: Path, audio: Path, dur: float, font
     return out
 
 
-def make_thumbnail(video: Path, title: str, font: str) -> Path:
-    """1280x720 thumbnail rendered from the video frame with wrapped bold title."""
+def make_thumbnail(video: Path, title: str, font: str, peak_info: dict = None, hook_text: str = "") -> Path:
+    """1280x720 high-CTR thumbnail rendered from the visual peak frame with 3-4 word curiosity text."""
+    out = OUT / "thumbnail.jpg"
+    if growth_optimizer is not None:
+        try:
+            return growth_optimizer.render_ctr_thumbnail(
+                video_path=video,
+                hook_text=hook_text or title,
+                font_path=font,
+                out_path=out,
+                work_dir=WORK,
+                peak_info=peak_info,
+            )
+        except Exception as exc:
+            print(f"  (CTR thumbnail fallback: {type(exc).__name__})")
     clean_title = re.sub(r"[^\w\s!?.,:'\-\u0080-\uffff]", "", title).strip() or title
     lines = textwrap.wrap(clean_title.upper(), width=18)[:3]
     tf = WORK / "thumb.txt"
@@ -1880,11 +1949,52 @@ def make_thumbnail(video: Path, title: str, font: str) -> Path:
           "drawbox=x=0:y=ih*0.45:w=iw:h=ih*0.55:color=black@0.55:t=fill,"
           f"drawtext=fontfile='{ff_escape(font)}':textfile='{ff_escape(tf)}':expansion=none"
           ":fontsize=86:fontcolor=yellow:borderw=7:bordercolor=black:line_spacing=12:x=60:y=h*0.52")
-    out = OUT / "thumbnail.jpg"
     vid_dur = media_duration(video)
     run(["ffmpeg", "-y", "-ss", f"{max(0.5, vid_dur * 0.3):.2f}", "-i", str(video),
          "-frames:v", "1", "-vf", vf, "-q:v", "3", str(out)])
     return out
+
+
+def _polish_short_audio_with_bgm_and_hook_sfx(video_path: Path, style: str, category: str, fmt: str) -> bool:
+    """Blends a subtle copyright-free ducked genre BGM bed + 0.0s hook SFX onto short-form video."""
+    if not (ENABLE_AUDIO_MASTER and audio_studio is not None and fmt != "long"):
+        return False
+    if os.environ.get("ENABLE_GROWTH_BGM", "1") != "1":
+        return False
+    try:
+        dur = media_duration(video_path)
+        if dur < 2.0 or dur > 120.0:
+            return False
+        series = growth_optimizer.get_series_profile(style, category) if growth_optimizer else {"bgm_genre": "fantasy", "hook_sfx": "whoosh"}
+        bgm_path = WORK / f"bgm_{video_path.stem}.wav"
+        sfx_path = WORK / f"hook_sfx_{video_path.stem}.wav"
+        mixed_mp4 = WORK / f"polished_{video_path.name}"
+        mood = audio_studio.map_style_to_bgm_mood(style or series["bgm_genre"])
+        bgm_ok = audio_studio.synthesize_bgm_bed(mood, dur, bgm_path)
+        sfx_ok = audio_studio.synthesize_sfx(series["hook_sfx"], sfx_path)
+        if not (bgm_ok and sfx_ok):
+            return False
+        fc = (
+            "[0:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[voice];"
+            "[1:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,volume=0.085,"
+            f"afade=t=in:st=0:d=0.6,afade=t=out:st={max(0.2, dur - 1.0):.2f}:d=1.0[bgm];"
+            "[2:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,volume=0.22[sfx];"
+            "[voice][bgm][sfx]amix=inputs=3:duration=first:dropout_transition=0:normalize=0,"
+            "alimiter=limit=0.95[aout]"
+        )
+        run([
+            "ffmpeg", "-y", "-i", str(video_path), "-i", str(bgm_path), "-i", str(sfx_path),
+            "-filter_complex", fc,
+            "-map", "0:v:0", "-map", "[aout]",
+            "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
+            str(mixed_mp4),
+        ])
+        if _valid_video(mixed_mp4):
+            shutil.move(str(mixed_mp4), str(video_path))
+            return True
+    except Exception as exc:
+        print(f"  (subtle BGM/hook SFX polish skipped: {type(exc).__name__})")
+    return False
 
 
 # ------------------------------------------------------------ Scene Joining (Natron xfade + Lossless Concat)
@@ -1920,31 +2030,51 @@ def _render_language_variant(
     }
 
     scenes, chapters, elapsed = [], [], 0.0
+    hook_banner_txt = (
+        growth_optimizer.extract_thumbnail_hook_words(script.get("title", ""), script["scenes"][0]["text"])
+        if (growth_optimizer is not None and fmt != "long" and script.get("scenes"))
+        else None
+    )
     for i, (sc, vis) in enumerate(zip(script["scenes"], visual_tracks)):
         audio = WORK / f"voice_{lang}_{i}.mp3"
         dur = make_voice(sc["text"], audio, voice_profile=voice_prof)
-        vis_dur = media_duration(vis)
-        # Ensure we use clean matching duration so audio never overruns or desyncs
         if sc.get("heading"):
             chapters.append((elapsed, sc["heading"]))
-        scene_vid = build_scene(i, sc["text"], vis, audio, dur, font, sc.get("heading"), style_meta=style_meta, lang=lang)
+        scene_vid = build_scene(
+            i, sc["text"], vis, audio, dur, font, sc.get("heading"),
+            style_meta=style_meta, lang=lang, hook_banner=hook_banner_txt if i == 0 else None,
+        )
         scenes.append(scene_vid)
         elapsed += dur + 0.25
 
     final = out_dir / "video.mp4"
     _join_scenes(scenes, final, fmt=fmt, style=script_style, list_name=f"list_{lang}.txt")
+    _polish_short_audio_with_bgm_and_hook_sfx(final, script_style, script.get("category", ""), fmt)
 
-    desc = script["description"].strip()
+    actual_dur = round(media_duration(final), 2)
+    peak_cover = growth_optimizer.select_peak_cover_frame(final, WORK) if growth_optimizer is not None else {"thumb_offset_ms": 1500}
+    seo_pkg = (
+        growth_optimizer.build_platform_seo(
+            script, fmt=fmt, chapters=chapters,
+            thumb_offset_ms=int(peak_cover.get("thumb_offset_ms") or 1500),
+            hook_type=str(script.get("hook_type") or "contradiction"),
+        )
+        if growth_optimizer is not None
+        else {}
+    )
     if fmt == "long":
-        if len(chapters) >= 3 and chapters[0][0] == 0:
-            desc += "\n\nChapters:\n" + "\n".join(f"{fmt_ts(t)} {h}" for t, h in chapters)
-        make_thumbnail(final, script["title"], font)
-    desc += "\n\n" + " ".join(script["hashtags"])
-    desc += "\n\nGenerated with AI animation & neural voice narration."
+        make_thumbnail(final, script["title"], font, peak_info=peak_cover, hook_text=seo_pkg.get("thumbnail_hook", ""))
+    desc = (seo_pkg.get("youtube_seo") or {}).get("description") or script["description"].strip()
     meta = {
         "format": fmt, "language": lang, "topic": script["topic"], "title": script["title"],
-        "description": desc, "hashtags": script["hashtags"],
+        "description": desc, "hashtags": (seo_pkg.get("instagram_seo") or {}).get("hashtags") or script["hashtags"],
         "category": script.get("category"), "style": script.get("style"),
+        "hook_type": script.get("hook_type") or "contradiction",
+        "series_name": seo_pkg.get("series_name"),
+        "duration_sec": actual_dur,
+        "duration_bucket": growth_optimizer.duration_bucket_for(actual_dur) if growth_optimizer else "short_28_45",
+        "youtube_seo": seo_pkg.get("youtube_seo"),
+        "instagram_seo": seo_pkg.get("instagram_seo"),
         "source": "trend" if idea_used else "category",
     }
     (out_dir / "metadata.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -1988,7 +2118,7 @@ def main() -> None:
     if not topic and not OFFLINE and os.environ.get("TRENDS", "1") == "1":
         try:
             import trends
-            trends.ensure_fresh(state, llm_json, CATEGORIES)
+            trends.ensure_fresh(state, llm_json, CATEGORIES, lang=primary_lang)
             save_state(state)
             if random.random() < _trend_share(state):
                 idea = trends.pick_idea(fmt, state)
@@ -2035,6 +2165,11 @@ def main() -> None:
         "subtitle_shadow": "0x000000" if script_style == "horror" else "black@0.85",
     }
 
+    hook_banner_txt = (
+        growth_optimizer.extract_thumbnail_hook_words(script.get("title", ""), script["scenes"][0]["text"])
+        if (growth_optimizer is not None and fmt != "long" and script.get("scenes"))
+        else None
+    )
     for i, sc in enumerate(script["scenes"]):
         if i % 5 == 0 or fmt != "long":
             print(f"2-3/4 Scene {i + 1}/{len(script['scenes'])}: {sc['text'][:55]}")
@@ -2050,27 +2185,47 @@ def main() -> None:
             visual = make_visual(i, sc["search_terms"], dur + 0.25, used, style=script_style)
 
         visual_tracks.append(visual)
-        scenes.append(build_scene(i, sc["text"], visual, audio, dur, font, sc.get("heading"), style_meta=style_meta, lang=primary_lang))
+        scenes.append(build_scene(
+            i, sc["text"], visual, audio, dur, font, sc.get("heading"),
+            style_meta=style_meta, lang=primary_lang, hook_banner=hook_banner_txt if i == 0 else None,
+        ))
         elapsed += dur + 0.25
 
     print("4/4 Joining scenes...")
     final = OUT / "video.mp4"
     used_transitions = _join_scenes(scenes, final, fmt=fmt, style=script_style, list_name="list.txt")
+    polished_audio = _polish_short_audio_with_bgm_and_hook_sfx(final, script_style, script.get("category", ""), fmt)
 
-    desc = script["description"].strip()
+    actual_dur = round(media_duration(final), 2)
+    peak_cover = growth_optimizer.select_peak_cover_frame(final, WORK) if growth_optimizer is not None else {"thumb_offset_ms": 1500}
+    seo_pkg = (
+        growth_optimizer.build_platform_seo(
+            script, fmt=fmt, chapters=chapters,
+            thumb_offset_ms=int(peak_cover.get("thumb_offset_ms") or 1500),
+            hook_type=str(script.get("hook_type") or "contradiction"),
+        )
+        if growth_optimizer is not None
+        else {}
+    )
     if fmt == "long":
-        if len(chapters) >= 3 and chapters[0][0] == 0:
-            desc += "\n\nChapters:\n" + "\n".join(f"{fmt_ts(t)} {h}" for t, h in chapters)
-        make_thumbnail(final, script["title"], font)
-    desc += "\n\n" + " ".join(script["hashtags"])
-    desc += "\n\nAI Animated & Narrated via Raptar Autonomous Engine."
+        make_thumbnail(final, script["title"], font, peak_info=peak_cover, hook_text=seo_pkg.get("thumbnail_hook", ""))
+
+    desc = (seo_pkg.get("youtube_seo") or {}).get("description") or script["description"].strip()
     meta = {
         "format": fmt, "language": primary_lang, "topic": script["topic"], "title": script["title"],
-        "description": desc, "hashtags": script["hashtags"],
+        "description": desc, "hashtags": (seo_pkg.get("instagram_seo") or {}).get("hashtags") or script["hashtags"],
         "category": script.get("category"), "style": script.get("style"),
+        "hook_type": script.get("hook_type") or "contradiction",
+        "series_name": seo_pkg.get("series_name"),
+        "duration_sec": actual_dur,
+        "duration_bucket": growth_optimizer.duration_bucket_for(actual_dur) if growth_optimizer else "short_28_45",
+        "thumb_offset_ms": int(peak_cover.get("thumb_offset_ms") or 0),
+        "youtube_seo": seo_pkg.get("youtube_seo"),
+        "instagram_seo": seo_pkg.get("instagram_seo"),
         "animated": use_animation, "ai_video_clips": _AI_VIDEO_COUNT,
         "motion_engine": bool(motion_engine),
         "transitions_applied": bool(used_transitions),
+        "audio_bgm_polished": bool(polished_audio),
         "particle_vfx": bool(ENABLE_PARTICLE_VFX and motion_engine is not None and fmt != "long"),
         "source": "trend" if idea else "category",
     }
@@ -2095,6 +2250,8 @@ def main() -> None:
             state["recent_categories"] = (state.get("recent_categories", []) + [script["category"]])[-10:]
         if script.get("style"):
             state["last_style"] = script["style"]
+        if script.get("hook_type"):
+            state["last_hook_type"] = script["hook_type"]
         state.pop("_style_hint", None)
         save_state(state)
 

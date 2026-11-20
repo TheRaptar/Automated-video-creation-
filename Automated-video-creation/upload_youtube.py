@@ -62,24 +62,32 @@ def get_access_token() -> str:
 def build_body(meta: dict, synthetic: bool) -> dict:
     is_short = meta.get("format", "short") in ("short", "story", "animated")
     lang = meta.get("language", "en")
-    desc = meta["description"].strip()
-    if is_short:
-        title = meta["title"].strip()[:88] + " #Shorts"
-        if "#shorts" not in desc.lower():
-            desc += "\n\n#Shorts #AIAnimation #viral"
+    yt_seo = meta.get("youtube_seo") if isinstance(meta.get("youtube_seo"), dict) else None
+    if yt_seo:
+        title = str(yt_seo.get("title") or meta.get("title") or "Untitled").strip()[:100]
+        if is_short and "#shorts" not in title.lower():
+            title = title[:88].rstrip() + " #Shorts"
+        desc = str(yt_seo.get("description") or meta.get("description") or "").strip()
+        combined_tags = [str(t).lstrip("#") for t in (yt_seo.get("tags") or []) if str(t).strip()][:15]
+        cat_id = os.environ.get("YT_CATEGORY") or str(yt_seo.get("category_id") or "24")
     else:
-        title = meta["title"].strip()[:100]
-
-    base_tags = [h.lstrip("#") for h in meta.get("hashtags", [])]
-    viral_tags = ["Shorts", "AIAnimation", "storytelling", "viral", "animation"]
-    combined_tags = list(dict.fromkeys(base_tags + viral_tags))[:18]
-
+        desc = meta["description"].strip()
+        if is_short:
+            title = meta["title"].strip()[:88] + " #Shorts"
+            if "#shorts" not in desc.lower():
+                desc += "\n\n#Shorts"
+        else:
+            title = meta["title"].strip()[:100]
+        base_tags = [h.lstrip("#") for h in meta.get("hashtags", []) if h.lstrip("#").lower() not in ("viral", "reels", "fyp")]
+        fallback_tags = ["Shorts", "storytelling", "animation"] if is_short else ["storytelling", "animation"]
+        combined_tags = list(dict.fromkeys(base_tags + fallback_tags))[:15]
+        cat_id = os.environ.get("YT_CATEGORY", "24")
     status = {"privacyStatus": os.environ.get("YT_PRIVACY", "public"),
               "selfDeclaredMadeForKids": False}
     if synthetic:
         status["containsSyntheticMedia"] = True
     return {"snippet": {"title": title, "description": desc[:4900], "tags": combined_tags,
-                        "categoryId": os.environ.get("YT_CATEGORY", "24"),
+                        "categoryId": str(cat_id),
                         "defaultLanguage": lang, "defaultAudioLanguage": lang},
             "status": status}
 
@@ -147,11 +155,22 @@ def _upload_one(video_path: Path, meta_path: Path, token: str, synthetic: bool, 
                         f"https://youtube.com/watch?v={vid}  (requested: {wanted}, actual: {actual})")
                 if meta.get("format") == "long":
                     set_thumbnail(token, vid)
+                yt_seo = meta.get("youtube_seo") if isinstance(meta.get("youtube_seo"), dict) else {}
+                try:
+                    import analytics_optimizer
+                    if yt_seo.get("playlist_name"):
+                        analytics_optimizer.maybe_assign_youtube_playlist(token, vid, yt_seo["playlist_name"], state)
+                    if yt_seo.get("first_comment"):
+                        analytics_optimizer.maybe_post_youtube_first_comment(token, vid, yt_seo["first_comment"])
+                except Exception as exc:
+                    print(f"  (post-upload YouTube booster skipped: {type(exc).__name__})")
                 now = datetime.now(timezone.utc).isoformat(timespec="seconds")
                 state["uploads"] = (uploads + [now])[-40:]
                 state["videos"] = (state.get("videos", []) + [{
                     "id": vid, "fmt": meta.get("format", "short"), "language": lang,
                     "category": meta.get("category"), "style": meta.get("style"),
+                    "hook_type": meta.get("hook_type"), "series_name": meta.get("series_name"),
+                    "duration_sec": meta.get("duration_sec"), "duration_bucket": meta.get("duration_bucket"),
                     "source": meta.get("source"), "title": meta["title"], "ts": now}])[-150:]
                 STATE.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
                 return True
@@ -173,6 +192,12 @@ def main() -> None:
     state = load_state()
     cap = int(os.environ.get("MAX_UPLOADS_PER_DAY", "10"))
     token = get_access_token()
+    try:
+        import analytics_optimizer
+        if analytics_optimizer.sync_youtube_metrics(state, oauth_token=token) > 0:
+            STATE.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
+    except Exception as exc:
+        print(f"  (YouTube analytics sync skipped: {type(exc).__name__})")
     synthetic = os.environ.get("YT_SYNTHETIC", "1") == "1"
 
     targets = [(VIDEO, META)]

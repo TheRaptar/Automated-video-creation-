@@ -791,6 +791,191 @@ def test_story_studio_e2e_and_resume():
         shutil.rmtree(sq_dir, ignore_errors=True)
 
 
+
+
+# -------------------------------------------------------------
+# 9. Growth, Retention, Platform SEO & Dual-Platform Analytics
+# -------------------------------------------------------------
+@test("9.1 Timezone-Aligned 7-Slot Language & Geo-Trend Routing")
+def test_growth_slot_routing():
+    import growth_optimizer
+    from raptar_agent import RaptarAgent
+
+    # Verify all 7 daily UTC cron hours map to all 7 unique languages
+    cron_hours = [1, 4, 8, 11, 15, 18, 22]
+    mapped = [RaptarAgent.resolve_language("auto", state={}, utc_hour=h) for h in cron_hours]
+    assert len(set(mapped)) == 7, f"Expected all 7 unique languages across 7 slots, got {mapped}"
+    assert mapped[2] == "en", f"08:00 UTC long slot should route to English, got {mapped[2]}"
+    assert mapped[3] == "ta", f"11:30 UTC (5 PM IST) should route to Tamil, got {mapped[3]}"
+    assert mapped[4] == "hi", f"15:00 UTC (8:30 PM IST) should route to Hindi, got {mapped[4]}"
+
+    # Regional trend geos match India/Global English & native geos
+    assert "IN" in growth_optimizer.geos_for_language("ta")
+    assert "IN" in growth_optimizer.geos_for_language("hi")
+    assert growth_optimizer.geos_for_language("en")[:2] == ["IN", "US"]
+    assert growth_optimizer.geos_for_language("ja") == ["JP"]
+
+    # Explicit overrides still honored
+    assert RaptarAgent.resolve_language("ta", state={}) == "ta"
+    return {"slot_langs": mapped}
+
+
+@test("9.2 Platform-Native YouTube & Instagram SEO + Hashtag Hygiene")
+def test_platform_native_seo():
+    import growth_optimizer
+    import upload_youtube
+    import upload_instagram
+
+    sample_script = {
+        "topic": "The Squirrel That Built The Ocean Bridge",
+        "title": "Why One Tiny Squirrel Shook An Army #viral",
+        "description": "Every single grain of sand changed an ancient ocean epic forever.",
+        "hashtags": ["#viral", "#reels", "#Mythology", "#fyp", "#SquirrelLegend"],
+        "language": "en",
+        "style": "animated_myth",
+        "category": "3D Animated Mythological & Cultural Epics",
+        "scenes": [{"text": "Nobody believed one tiny squirrel could build an ocean bridge."}],
+    }
+    pkg = growth_optimizer.build_platform_seo(sample_script, fmt="animated", thumb_offset_ms=3450, hook_type="contradiction")
+    yt_seo = pkg["youtube_seo"]
+    ig_seo = pkg["instagram_seo"]
+
+    assert yt_seo["category_id"] == "1", f"Expected Film & Animation category 1, got {yt_seo['category_id']}"
+    assert "#Shorts" in yt_seo["title"] and "#viral" not in yt_seo["title"].lower()
+    assert "Raptar Autonomous Engine" not in yt_seo["description"]
+    assert 3 <= len(ig_seo["hashtags"]) <= 5, f"Instagram should use 3-5 focused tags, got {ig_seo['hashtags']}"
+    assert all(t.lower() not in ("#viral", "#reels", "#fyp") for t in ig_seo["hashtags"]), f"Spam tag leaked: {ig_seo['hashtags']}"
+    assert ig_seo["thumb_offset_ms"] == 3450
+
+    # Verify uploaders consume the new packages cleanly
+    meta = {
+        "format": "animated", "language": "en", "title": sample_script["title"],
+        "description": yt_seo["description"], "hashtags": ig_seo["hashtags"],
+        "youtube_seo": yt_seo, "instagram_seo": ig_seo,
+    }
+    yt_body = upload_youtube.build_body(meta, synthetic=True)
+    assert yt_body["snippet"]["categoryId"] == "1"
+    assert "viral" not in [t.lower() for t in yt_body["snippet"]["tags"]]
+    ig_cap = upload_instagram.build_caption(meta)
+    assert "#viral" not in ig_cap.lower() and ig_seo["first_comment"] in ig_cap
+    return {"yt_cat": yt_body["snippet"]["categoryId"], "ig_tags": ig_seo["hashtags"]}
+
+
+@test("9.3 Peak-Frame Cover Selector, CTR Thumbnail & Safe-Zone ASS")
+def test_peak_cover_and_safe_zone():
+    import growth_optimizer
+    import make_video
+    import shutil
+    import subprocess
+
+    work = SCRIPT_DIR / "test_growth_cover_work"
+    work.mkdir(exist_ok=True)
+    try:
+        # Build a 4s test video: first 1.2s pitch black, remaining 2.8s bright colorful pattern
+        vid = work / "fade_test.mp4"
+        subprocess.run([
+            "ffmpeg", "-y",
+            "-f", "lavfi", "-i", "color=c=black:s=540x960:d=1.6:r=24",
+            "-f", "lavfi", "-i", "testsrc2=s=540x960:d=2.4:r=24",
+            "-filter_complex", "[0:v][1:v]concat=n=2:v=1:a=0[v]",
+            "-map", "[v]", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(vid)
+        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+
+        peak = growth_optimizer.select_peak_cover_frame(vid, work, samples=5)
+        assert peak["timestamp_sec"] >= 1.6, f"Peak scorer should skip dark fade (<1.6s), picked {peak}"
+        assert peak["thumb_offset_ms"] >= 1600
+
+        # Render 1280x720 CTR thumbnail
+        font = make_video.find_font("en")
+        thumb = work / "ctr_thumb.jpg"
+        growth_optimizer.render_ctr_thumbnail(vid, "Nobody believed this secret!", font, thumb, work, peak_info=peak)
+        assert thumb.exists() and thumb.stat().st_size > 4000
+
+        # Verify Safe-Zone ASS margins, power-word highlight, and HookBanner on vertical 9:16
+        make_video.configure("short")
+        old_work = make_video.WORK
+        make_video.WORK = work
+        try:
+            ass_p = make_video._write_ass_subtitles(
+                0, "The secret truth changed 100 lives forever.", 3.5, font,
+                {"subtitle_color": "0x00E5FF"}, lang="en", hook_banner="SECRET TRUTH REVEALED"
+            )
+            ass_txt = ass_p.read_text(encoding="utf-8")
+            assert "Style: HookBanner," in ass_txt and "SECRET TRUTH REVEALED" in ass_txt
+            assert r"{\c&H0000E5FF}" in ass_txt, "Power word inline ASS color tag missing"
+            sz = growth_optimizer.get_safe_zone_margins(1080, 1920)
+            assert sz["margin_r"] >= 140 and sz["margin_v"] >= 480
+        finally:
+            make_video.WORK = old_work
+
+        return {"peak_ms": peak["thumb_offset_ms"], "peak_score": peak["score"], "thumb_bytes": thumb.stat().st_size}
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+@test("9.4 Dual-Platform Analytics, Bandit Weights & Scope-Safe Boosters")
+def test_dual_platform_analytics_and_boosters():
+    import analytics_optimizer
+
+    class FakeResp:
+        def __init__(self, ok, data, status_code=200):
+            self.ok = ok
+            self._data = data
+            self.status_code = status_code
+        def json(self):
+            return self._data
+
+    state = {
+        "videos": [
+            {"id": "yt1", "ts": "2026-11-10T00:00:00+00:00", "category": "myth", "style": "animated_myth", "hook_type": "contradiction", "duration_bucket": "short_28_45"},
+            {"id": "yt2", "ts": "2026-11-10T00:00:00+00:00", "category": "myth", "style": "animated_myth", "hook_type": "contradiction", "duration_bucket": "short_28_45"},
+            {"id": "yt3", "ts": "2026-11-10T00:00:00+00:00", "category": "horror", "style": "horror", "hook_type": "what_if", "duration_bucket": "short_46_75"},
+            {"id": "yt4", "ts": "2026-11-10T00:00:00+00:00", "category": "horror", "style": "horror", "hook_type": "what_if", "duration_bucket": "short_46_75"},
+        ],
+        "ig_videos": [
+            {"media_id": "ig1", "ts": "2026-11-12T00:00:00+00:00", "category": "myth", "style": "animated_myth", "hook_type": "contradiction", "duration_bucket": "short_28_45"},
+            {"media_id": "ig2", "ts": "2026-11-12T00:00:00+00:00", "category": "horror", "style": "horror", "hook_type": "what_if", "duration_bucket": "short_46_75"},
+        ],
+    }
+
+    def fake_yt_get(url, params=None, headers=None, timeout=20):
+        assert headers and "Bearer fake_oauth" in headers.get("Authorization", "")
+        return FakeResp(True, {"items": [
+            {"id": "yt1", "statistics": {"viewCount": "12000", "likeCount": "950", "commentCount": "140"}},
+            {"id": "yt2", "statistics": {"viewCount": "9500", "likeCount": "780", "commentCount": "110"}},
+            {"id": "yt3", "statistics": {"viewCount": "400", "likeCount": "12", "commentCount": "1"}},
+            {"id": "yt4", "statistics": {"viewCount": "350", "likeCount": "10", "commentCount": "0"}},
+        ]})
+
+    def fake_ig_get(url, params=None, timeout=15):
+        if url.endswith("/insights"):
+            if "ig1" in url:
+                return FakeResp(True, {"data": [
+                    {"name": "views", "values": [{"value": 15000}]},
+                    {"name": "shares", "values": [{"value": 420}]},
+                    {"name": "saved", "values": [{"value": 610}]},
+                    {"name": "ig_reels_avg_watch_time", "values": [{"value": 24000}]},
+                ]})
+            return FakeResp(True, {"data": [{"name": "views", "values": [{"value": 300}]}]})
+        return FakeResp(True, {"like_count": 1200 if "ig1" in url else 15, "comments_count": 85 if "ig1" in url else 1})
+
+    yt_n = analytics_optimizer.sync_youtube_metrics(state, oauth_token="fake_oauth", http_get=fake_yt_get, force=True)
+    ig_n = analytics_optimizer.sync_instagram_metrics(state, token="fake_ig", http_get=fake_ig_get, force=True)
+    assert yt_n == 4 and ig_n == 2
+    w = state["weights"]
+    assert w["style"]["animated_myth"] > w["style"]["horror"], f"Myth should outrank horror: {w}"
+    assert w["hook_type"]["contradiction"] > w["hook_type"]["what_if"], f"Contradiction hook should outrank what_if: {w}"
+    assert w["duration_bucket"]["short_28_45"] > w["duration_bucket"]["short_46_75"]
+
+    # Verify scope-safe 403 handling on optional playlist & comment boosters (must never raise)
+    deny = lambda *a, **kw: FakeResp(False, {"error": "insufficient_scope"}, status_code=403)
+    assert analytics_optimizer.maybe_assign_youtube_playlist("tok", "yt1", "Mythic Legends (English)", state, http_get=deny, http_post=deny) is None
+    assert analytics_optimizer.maybe_post_youtube_first_comment("tok", "yt1", "What do you think?", http_post=deny) is False
+    assert analytics_optimizer.maybe_post_instagram_first_comment("tok", "ig1", "What do you think?", http_post=deny) is False
+
+    return {"yt_synced": yt_n, "ig_synced": ig_n, "hook_weights": w["hook_type"]}
+
+
 if __name__ == "__main__":
     print("=====================================================")
     print("        RAPTAR TECHNICAL VERIFICATION SUITE         ")
@@ -818,6 +1003,10 @@ if __name__ == "__main__":
     test_audio_studio()
     test_trend_discovery_engine()
     test_story_studio_e2e_and_resume()
+    test_growth_slot_routing()
+    test_platform_native_seo()
+    test_peak_cover_and_safe_zone()
+    test_dual_platform_analytics_and_boosters()
     
     print("\n=====================================================")
     print("                   TEST SUMMARY                      ")

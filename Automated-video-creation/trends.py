@@ -190,21 +190,30 @@ Rules:
     return llm_json(prompt, rounds=2, valid=valid)
 
 
-def ensure_fresh(state: dict, llm_json, categories: list[str]) -> None:
-    """Refresh the daily trend ideas (once per UTC day) and the performance weights."""
+def ensure_fresh(state: dict, llm_json, categories: list[str], lang: str = "en") -> None:
+    """Refresh daily region-matched trend ideas and multi-platform engagement weights."""
     today = _today()
-    if (state.get("trends") or {}).get("date") == today:
+    active_geos = list(GEOS)
+    try:
+        import growth_optimizer
+        lang_geos = growth_optimizer.geos_for_language(lang)
+        active_geos = list(dict.fromkeys(lang_geos + [g for g in GEOS if g not in lang_geos]))[:3]
+    except Exception:
+        pass
+    geo_key = ",".join(active_geos)
+    cached = state.get("trends") or {}
+    if cached.get("date") == today and (cached.get("geo_key") == geo_key or not lang):
         return
-    print("  Researching today's trends...")
+    print(f"  Researching today's regional trends (lang={lang} | geos={geo_key})...")
     update_performance(state)
     news_items, hn_items = [], []
     try:
         import trend_discovery
-        news_items = trend_discovery.fetch_google_news_rss(geo=GEOS[0] if GEOS else "US", limit=12)
+        news_items = trend_discovery.fetch_google_news_rss(geo=active_geos[0] if active_geos else "IN", limit=12)
         hn_items = trend_discovery.fetch_hackernews_top(limit=6)
     except Exception:
         pass
-    sig = {"google": {g: google_trends(g) for g in GEOS}, "wiki": wikipedia_top(),
+    sig = {"google": {g: google_trends(g) for g in active_geos}, "wiki": wikipedia_top(),
            "youtube": youtube_signals(categories), "news": news_items, "hn": hn_items}
     if not (any(sig["google"].values()) or sig["wiki"] or sig["youtube"] or sig["news"]):
         print("  No trend signals reachable - using normal topic selection.")
@@ -225,7 +234,7 @@ def ensure_fresh(state: dict, llm_json, categories: list[str]) -> None:
                       "why_trending": str(i.get("why_trending", "")).strip(),
                       "format": i.get("format") if i.get("format") in ("short", "long", "story", "animated") else "short",
                       "style": i.get("style"), "score": score, "used": False})
-    state["trends"] = {"date": today, "ideas": ideas,
+    state["trends"] = {"date": today, "geo_key": geo_key, "ideas": ideas,
                        "format_trends": [str(x) for x in data.get("format_trends", [])][:5],
                        "title_patterns": [str(x) for x in data.get("title_patterns", [])][:5]}
     print(f"  {len(ideas)} trend-based ideas ready. Format trends: {state['trends']['format_trends']}")
@@ -246,40 +255,17 @@ def pick_idea(fmt: str, state: dict):
 
 # ------------------------------------------------------------ performance feedback loop
 def update_performance(state: dict) -> None:
-    """Public view counts of our own videos -> relative weights per category and style."""
+    """Syncs YouTube/Instagram engagement metrics (when available) and recomputes bandit weights."""
+    try:
+        import analytics_optimizer
+        if YT_API_KEY:
+            analytics_optimizer.sync_youtube_metrics(state, api_key=YT_API_KEY)
+        weights = analytics_optimizer.update_growth_weights(state)
+        if weights:
+            print(f"  Performance weights active: {list(weights.keys())}")
+        return
+    except Exception as e:
+        print(f"  (analytics optimizer fallback: {type(e).__name__})")
     vids = state.get("videos", [])[-100:]
     if not (YT_API_KEY and vids):
         return
-    views = {}
-    try:
-        for i in range(0, len(vids), 50):
-            ids = ",".join(v["id"] for v in vids[i:i + 50])
-            for it in _yt("videos", part="statistics", id=ids).get("items", []):
-                views[it["id"]] = int(it["statistics"].get("viewCount", 0))
-    except Exception as e:
-        print(f"  Performance check failed: {type(e).__name__}")
-        return
-    now, rows = datetime.now(timezone.utc), []
-    for v in vids:
-        if v["id"] not in views:
-            continue
-        v["views"] = views[v["id"]]
-        try:
-            age = (now - datetime.fromisoformat(v["ts"])).total_seconds() / 86400
-        except Exception:
-            continue
-        if age >= 2:                                    # let a video settle for 2 days first
-            rows.append((v, v["views"] / age))
-    if len(rows) < 4:
-        return
-    overall = sum(s for _, s in rows) / len(rows) or 1.0
-    weights = {}
-    for key in ("category", "style", "source"):
-        groups = {}
-        for v, s in rows:
-            if v.get(key):
-                groups.setdefault(v[key], []).append(s)
-        weights[key] = {k: round(min(2.0, max(0.5, (sum(x) / len(x)) / overall)), 2)
-                        for k, x in groups.items() if len(x) >= 2}
-    state["weights"] = weights
-    print(f"  Performance weights updated: {weights}")

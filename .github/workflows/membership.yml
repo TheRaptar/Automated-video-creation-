@@ -1,0 +1,37 @@
+name: "Phase 2: build point-in-time index membership"
+
+on:
+  workflow_dispatch:
+    inputs:
+      index:
+        description: "Index"
+        type: choice
+        options: [nifty500, nifty200, nifty50]
+        default: nifty500
+
+defaults:
+  run:
+    working-directory: trading-bot
+
+jobs:
+  membership:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Build membership from the official monthly archives
+        run: python run_build_membership.py --index ${{ inputs.index }}
+      - name: Show report in the run summary
+        if: always()
+        run: cat reports/membership_${{ inputs.index }}/summary.md >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: membership-${{ inputs.index }}
+          path: |
+            trading-bot/reports/membership_${{ inputs.index }}/
+            trading-bot/data/

@@ -1,0 +1,45 @@
+name: "Phase 2: historical data audit"
+
+on:
+  workflow_dispatch:
+    inputs:
+      index:
+        description: "Universe to audit"
+        type: choice
+        options: [nifty50, nifty200, nifty500]
+        default: nifty50
+      years:
+        description: "Years of history"
+        default: "16"
+      splits:
+        description: "Also check recorded splits (slower)"
+        type: boolean
+        default: true
+
+defaults:
+  run:
+    working-directory: trading-bot
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: pytest -q
+      - name: Audit the price data
+        run: python run_data_audit.py --index ${{ inputs.index }} --years ${{ inputs.years }} ${{ inputs.splits && '--splits' || '' }}
+      - name: Show report in the run summary
+        if: always()
+        run: cat reports/data_audit/${{ inputs.index }}/summary.md >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: data-audit-${{ inputs.index }}
+          path: |
+            trading-bot/reports/data_audit/
+            trading-bot/data/

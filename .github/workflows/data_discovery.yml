@@ -1,0 +1,30 @@
+name: "Phase 2: data discovery (what do the free sources really return?)"
+
+# Run this FIRST. It tries every free data source and reports exactly what worked. File must live in the repo ROOT .github/workflows/
+on:
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: trading-bot
+
+jobs:
+  discovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Probe every data source
+        run: python run_data_discovery.py
+      - name: Show report in the run summary
+        if: always()
+        run: cat reports/discovery/summary.md >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: data-discovery
+          path: trading-bot/reports/discovery/

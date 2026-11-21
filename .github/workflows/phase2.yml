@@ -1,0 +1,48 @@
+name: "Phase 2: re-run all strategies on corrected data (research mode only)"
+
+# Research and paper-trading mode ONLY: no broker code exists in this project (a test enforces it).
+on:
+  workflow_dispatch:
+    inputs:
+      null_runs:
+        description: "Random-selection replays for the multi-factor null test (gate 5 needs >= 1000)"
+        default: "1000"
+      sweep:
+        description: "Run the parameter-stability sweeps (gate 7)"
+        type: boolean
+        default: true
+
+defaults:
+  run:
+    working-directory: trading-bot
+
+jobs:
+  phase2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        index: [nifty50, nifty200, nifty500]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: pytest -q
+      - name: Point-in-time membership (best effort)
+        continue-on-error: true
+        run: python run_build_membership.py --index ${{ matrix.index }}
+      - name: Phase 2 run
+        run: python run_phase2.py --index ${{ matrix.index }} --null-runs ${{ inputs.null_runs }} ${{ inputs.sweep && '' || '--no-sweep' }}
+      - name: Show summary in the run summary
+        if: always()
+        run: cat reports/phase2/${{ matrix.index }}/PHASE2_SUMMARY.md >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase2-${{ matrix.index }}
+          path: |
+            trading-bot/reports/
+            trading-bot/data/

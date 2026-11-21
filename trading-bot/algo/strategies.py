@@ -30,6 +30,14 @@ def _gate(df: pd.DataFrame, ok: pd.Series) -> pd.DataFrame:
     return df & ok.reindex(df.index).fillna(False).to_numpy()[:, None]
 
 
+def _members(df: pd.DataFrame, p: Panel) -> pd.DataFrame:
+    """Restrict a table to point-in-time index members (no-op when membership is unknown)."""
+    if p.members is None:
+        return df
+    return df.where(p.members.reindex(index=df.index, columns=df.columns).fillna(False).astype(bool)) if df.dtypes.iloc[0] != bool \
+        else df & p.members.reindex(index=df.index, columns=df.columns).fillna(False).astype(bool)
+
+
 def regime_ok(p: Panel, n: int = 200) -> pd.Series:
     """Market filter: only be invested while the benchmark is above its n-day average."""
     return (p.benchmark > sma(p.benchmark, n)).fillna(False)
@@ -61,7 +69,7 @@ class TrendMomentum(Strategy):
     def signals(self, p):
         c = p.close
         mom = c.shift(self.skip) / c.shift(self.lookback) - 1
-        ok = (c > sma(c, self.ma)) & (mom > 0)
+        ok = _members((c > sma(c, self.ma)) & (mom > 0), p)
         rank = mom.where(ok).rank(axis=1, ascending=False, method="first")
         sel = (rank <= self.top_n).astype(float)
         reb = pd.DataFrame(np.repeat(month_end_flags(c.index)[:, None], c.shape[1], axis=1),
@@ -85,7 +93,7 @@ class Donchian(Strategy):
         c = p.close
         hi = p.high.rolling(self.entry, min_periods=self.entry).max().shift(1)
         lo = p.low.rolling(self.exit_n, min_periods=self.exit_n).min().shift(1)
-        enter = (c > hi) & (c > sma(c, self.ma))
+        enter = _members((c > hi) & (c > sma(c, self.ma)), p)
         leave = c < lo
         state = pd.DataFrame(np.nan, index=c.index, columns=c.columns)
         state = state.mask(enter, 1.0).mask(leave, 0.0)      # exit wins if both ever happen
@@ -111,7 +119,7 @@ class RSI2Pullback(Strategy):
         c = p.close
         r = rsi(c, self.rsi_n)
         trend = c > sma(c, self.ma)
-        enter = trend & (r < self.entry_thr)
+        enter = _members(trend & (r < self.entry_thr), p)
         leave = (r > self.exit_thr) | ~trend
         state = pd.DataFrame(np.nan, index=c.index, columns=c.columns)
         state = state.mask(enter, 1.0).mask(leave, 0.0)
@@ -146,6 +154,8 @@ class MultiFactor(Strategy):
         from .factors import compute_factors
         from .multifactor import composite, ridge_scores
         f = compute_factors(p, list(self.factors))
+        if p.members is not None:
+            f = {k: v.where(p.members.reindex(index=v.index, columns=v.columns).fillna(False).astype(bool)) for k, v in f.items()}
         score = ridge_scores(f, list(self.factors), p) if self.model == "ridge" else composite(f, list(self.factors))
         S = score.to_numpy(float)
         T, N = S.shape

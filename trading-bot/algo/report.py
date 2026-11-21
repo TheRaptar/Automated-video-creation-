@@ -19,11 +19,13 @@ def _num(x, d=2):
     return "n/a" if x is None or not np.isfinite(x) else f"{x:.{d}f}"
 
 
-def write_report(out, res, panel, cut, rf, robust_df, data_label, universe_n):
+def write_report(out, res, panel, cut, rf, robust_df, data_label, universe_n, data_status_md=""):
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     cap = res.config.capital
-    bench = (panel.benchmark.reindex(res.equity.index).ffill() / panel.benchmark.dropna().iloc[0]) * cap
+    bsrc = panel.benchmark_tr if panel.benchmark_tr is not None else panel.benchmark
+    bname = "Index (total return)" if panel.benchmark_tr is not None else "Index (price only)"
+    bench = (bsrc.reindex(res.equity.index).ffill() / bsrc.dropna().iloc[0]) * cap
     bench = bench / bench.iloc[0] * cap
     full, bfull = performance(res.equity, rf), performance(bench, rf)
     ew_idx = equal_weight_index(panel.close).reindex(res.equity.index).ffill()
@@ -76,7 +78,7 @@ def write_report(out, res, panel, cut, rf, robust_df, data_label, universe_n):
           f"*Data:* {data_label} - {universe_n} stocks, {res.equity.index[0].date()} to {res.equity.index[-1].date()} "
           f"({years:.1f} years). *Capital:* Rs {cap:,.0f}. *Max positions:* {res.config.max_positions}. "
           f"*Params:* `{res.params}`", "",
-          "| Metric | Strategy | Index (price only) | Equal-weight universe | Strategy in-sample | Strategy out-of-sample |", "|---|---|---|---|---|---|",
+          f"| Metric | Strategy | {bname} | Equal-weight universe | Strategy in-sample | Strategy out-of-sample |", "|---|---|---|---|---|---|",
           row("CAGR", "cagr", _pct), row("Total return", "total_return", _pct), row("Volatility", "volatility", _pct),
           row("Sharpe", "sharpe", _num), row("Sortino", "sortino", _num), row("Max drawdown", "max_drawdown", _pct),
           row("Calmar", "calmar", _num), "",
@@ -99,9 +101,11 @@ def write_report(out, res, panel, cut, rf, robust_df, data_label, universe_n):
                robust_df.round(3).to_markdown(index=False) if hasattr(robust_df, "to_markdown") and _has_tabulate() else
                "```\n" + robust_df.round(3).to_string(index=False) + "\n```"]
     md += ["", "## Reality checks", ""] + ([f"- {f}" for f in flags] or ["- No automatic red flags - which is NOT proof the strategy works."])
+    if data_status_md:
+        md += ["", "## Data status", "", data_status_md]
     md += ["", "## Read this before trusting any number", "",
            "- A backtest is a story about the past, not a forecast. Markets change; edges fade.",
-           "- The index benchmark is price-only (excludes roughly 1.3%/yr of dividends), so it understates buy-and-hold; compare with the equal-weight universe too.",
+           "- If the benchmark column says \"price only\", it excludes roughly 1.3%/yr of dividends and understates buy-and-hold; compare with the equal-weight universe too.",
            "- Prices are adjusted for splits and dividends; fills assume you can trade at the next open plus slippage.",
            "- Tax is not included: delivery gains held under 12 months are taxed as short-term capital gains. Keep records / ask a CA.",
            "- Not investment advice. No result here guarantees future profit."]

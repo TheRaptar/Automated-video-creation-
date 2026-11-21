@@ -21,6 +21,8 @@ class Panel:
     volume: pd.DataFrame
     benchmark: pd.Series
     macro: pd.DataFrame | None = None   # optional: vix, usdinr, brent, us10y
+    benchmark_tr: pd.Series | None = None   # total-return index (dividends included), when available
+    members: pd.DataFrame | None = None     # point-in-time membership mask (dates x symbols, bool), when available
 
     @property
     def dates(self):
@@ -33,7 +35,9 @@ class Panel:
     def slice(self, start=None, end=None) -> "Panel":
         sl = slice(start, end)
         return Panel(*(getattr(self, c).loc[sl] for c in COLS), benchmark=self.benchmark.loc[sl],
-                     macro=None if self.macro is None else self.macro.loc[sl])
+                     macro=None if self.macro is None else self.macro.loc[sl],
+                     benchmark_tr=None if self.benchmark_tr is None else self.benchmark_tr.loc[sl],
+                     members=None if self.members is None else self.members.loc[sl])
 
 
 def equal_weight_index(close: pd.DataFrame) -> pd.Series:
@@ -41,7 +45,7 @@ def equal_weight_index(close: pd.DataFrame) -> pd.Series:
 
 
 def build_panel(frames: dict, benchmark: pd.Series | None = None, min_rows: int = 260,
-                macro: pd.DataFrame | None = None) -> Panel:
+                macro: pd.DataFrame | None = None, benchmark_tr: pd.Series | None = None) -> Panel:
     frames = {s: f for s, f in frames.items() if f is not None and len(f) >= min_rows}
     if not frames:
         raise ValueError("No usable price history (need at least %d rows per symbol)." % min_rows)
@@ -53,10 +57,12 @@ def build_panel(frames: dict, benchmark: pd.Series | None = None, min_rows: int 
     if benchmark is None or benchmark.dropna().empty:
         bench = equal_weight_index(close)
     else:
-        bench = benchmark.reindex(close.index).ffill().bfill()
+        bench = benchmark.reindex(close.index).ffill()      # no bfill: back-filling would copy FUTURE values into early dates
     if macro is not None:
         macro = macro.reindex(close.index).ffill()
-    return Panel(cols["open"], cols["high"], cols["low"], close, cols["volume"], bench, macro)
+    if benchmark_tr is not None:
+        benchmark_tr = benchmark_tr.reindex(close.index).ffill()
+    return Panel(cols["open"], cols["high"], cols["low"], close, cols["volume"], bench, macro, benchmark_tr)
 
 
 def _clean(df: pd.DataFrame) -> pd.DataFrame:
@@ -82,8 +88,9 @@ def _safe(sym: str) -> str:
     return re.sub(r"[^A-Za-z0-9_-]", "_", sym)
 
 
-def download_yahoo(symbols, start, end=None, cache_dir="data_cache", benchmark="^NSEI", pause=0.6) -> Panel:
-    """Free historical data (adjusted for splits/dividends). Cached for a day."""
+def download_frames(symbols, start, end=None, cache_dir="data_cache", benchmark="^NSEI", pause=0.6):
+    """Free historical data from Yahoo (adjusted for splits/dividends where Yahoo does so). Cached for a day.
+    Returns ({symbol: OHLCV frame}, benchmark OHLCV frame or None). Symbols with no data are simply absent (and listed)."""
     import yfinance as yf
     cache = Path(cache_dir)
     cache.mkdir(parents=True, exist_ok=True)
@@ -106,10 +113,16 @@ def download_yahoo(symbols, start, end=None, cache_dir="data_cache", benchmark="
         return None
 
     frames = {}
-    for s in symbols:
-        frames[s] = fetch(f"{s}.NS")
+    for sym in symbols:
+        df = fetch(f"{sym}.NS")
+        if df is not None:
+            frames[sym] = df
         time.sleep(pause)
-    bench = fetch(benchmark)
+    return frames, fetch(benchmark)
+
+
+def download_yahoo(symbols, start, end=None, cache_dir="data_cache", benchmark="^NSEI", pause=0.6) -> Panel:
+    frames, bench = download_frames(symbols, start, end, cache_dir, benchmark, pause)
     return build_panel(frames, None if bench is None else bench["close"])
 
 

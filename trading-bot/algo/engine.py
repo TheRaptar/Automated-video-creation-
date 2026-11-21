@@ -32,7 +32,8 @@ class Config:
     min_adv: float = 5e7                  # skip stocks trading < Rs 5 crore/day (20-day average)
     max_adv_pct: float = 0.05             # never buy more than 5% of a day's traded value
     cash_buffer: float = 0.02             # keep 2% of equity as cash
-    cash_yield: float = 0.0               # annual yield on idle cash (liquid fund ~6%); CLI default 6%
+    cash_yield: float = 0.0               # constant annual yield on idle cash (legacy / fallback)
+    cash_returns: pd.Series | None = None  # daily return on idle cash by date (preferred: official overnight-rate index)
     slippage_model: str = "flat"          # "flat" (slippage_bps) or "impact" (spread + sqrt-law market impact)
     impact_coeff: float = 0.8
     half_spread_bps: float = 3.0
@@ -74,6 +75,7 @@ def run_backtest(panel: Panel, strategy: Strategy, cfg: Config | None = None) ->
     slip = cfg.slippage_bps / 1e4
     sigma = panel.close.pct_change().rolling(20, min_periods=20).std().to_numpy(dtype=float)
     daily_y = (1 + cfg.cash_yield) ** (1 / 252) - 1 if cfg.cash_yield else 0.0
+    cash_ret = cfg.cash_returns.reindex(dates).fillna(0.0).to_numpy(dtype=float) if cfg.cash_returns is not None else None
     total_interest = 0.0
 
     def slip_for(j: int, i: int, value: float) -> float:
@@ -110,8 +112,8 @@ def run_backtest(panel: Panel, strategy: Strategy, cfg: Config | None = None) ->
 
     for i in range(n_days):
         o, l, c = O[i], L[i], C[i]
-        if daily_y:
-            interest = cash * daily_y
+        if cash_ret is not None or daily_y:
+            interest = cash * (cash_ret[i] if cash_ret is not None else daily_y)
             cash += interest
             total_interest += interest
 

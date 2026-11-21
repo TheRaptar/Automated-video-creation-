@@ -64,3 +64,9 @@ python3 story_studio.py --resume projects/<project_id>
 ```
 
 See [`OPEN_SOURCE_RESEARCH_REPORT.md`](./OPEN_SOURCE_RESEARCH_REPORT.md) for the full verified GitHub repository matrix, licenses, VRAM requirements, and known limitations.
+
+## Growth, Retention, SEO & Dual-Platform Analytics (`growth_optimizer.py` & `analytics_optimizer.py`)
+- **Timezone-Aligned 7-Slot Routing**: Preserves all 7 daily slots and all 7 languages (`en`, `ta`, `hi`, `es`, `fr`, `pt`, `ja`), routing each UTC slot to its audience's native peak window and matching regional Google Trends / News feeds (`IN` for Hindi/Tamil, `IN,US,GB` for English, etc.).
+- **Retention Packaging**: 0-1.5s scroll-stop hook archetypes (75/25 bandit), tighter 3-4.5s visual pacing, seamless replay loop bridges, vertical safe-zone power-word ASS captions + 1.8s top Hook Banner, and subtle ducked copyright-free BGM + opening hook SFX.
+- **Peak-Frame Cover & Platform-Native SEO**: Scores frames to pick the sharpest cover for YouTube CTR thumbnails and Instagram `thumb_offset`, removes bot footers and `#viral`/`#reels` spam, sets dynamic YouTube categories, and formats 4-5 focused niche Instagram hashtags + localized comment/save CTAs.
+- **Closed-Loop Dual-Platform Analytics**: Syncs YouTube OAuth video statistics (`views`, `likes`, `comments`) and Instagram Graph Reels Insights (`views`, `likes`, `comments`, `shares`, `saved`, `ig_reels_avg_watch_time`) to auto-tune multi-dimensional bandit weights (`category`, `style`, `hook_type`, `duration_bucket`), plus scope-safe YouTube playlist assignment and first-comment prompts.

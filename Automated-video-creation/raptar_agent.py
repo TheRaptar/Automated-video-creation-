@@ -312,8 +312,22 @@ class RaptarAgent:
     # Language Helpers
     # ---------------------------------------------------------
     @staticmethod
-    def resolve_language(lang_spec: Optional[str] = None, state: Optional[Dict[str, Any]] = None) -> str:
-        """Resolves a single language code from CLI/env ('en', 'ta', 'auto', or 'en,ta,hi')."""
+    def resolve_language(
+        lang_spec: Optional[str] = None,
+        state: Optional[Dict[str, Any]] = None,
+        utc_hour: Optional[int] = None,
+    ) -> str:
+        """Resolves a single language code ('en', 'ta', 'auto', or 'en,ta,hi') with prime-time UTC slot routing."""
+        try:
+            import growth_optimizer
+            return growth_optimizer.resolve_slot_language(
+                lang_spec=lang_spec,
+                state=state,
+                utc_hour=utc_hour,
+                supported_langs=LANGUAGES,
+            )
+        except Exception:
+            pass
         raw = (lang_spec or os.environ.get("TARGET_LANGUAGE", "en")).strip().lower()
         if not raw:
             return "en"
@@ -323,7 +337,6 @@ class RaptarAgent:
             pool = [c.strip() for c in raw.split(",") if c.strip() in LANGUAGES] or ["en"]
         else:
             return raw if raw in LANGUAGES else "en"
-
         idx = int((state or {}).get("lang_index", 0))
         chosen = pool[idx % len(pool)]
         if isinstance(state, dict):

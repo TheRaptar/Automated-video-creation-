@@ -438,22 +438,20 @@ def cloud_delete(public_id: str) -> None:
 # ------------------------------------------------------------
 
 def build_caption(metadata: dict) -> str:
+    ig_seo = metadata.get("instagram_seo") if isinstance(metadata.get("instagram_seo"), dict) else None
+    if ig_seo and str(ig_seo.get("caption", "")).strip():
+        return str(ig_seo["caption"]).strip()[:2200]
     title = str(metadata.get("title", "")).strip()
     description = str(metadata.get("description", "")).strip()
     lang = metadata.get("language", "en")
     raw_tags = metadata.get("hashtags", [])
-    clean_tags = " ".join(list(dict.fromkeys(
-        [t if t.startswith("#") else f"#{t}" for t in raw_tags]
-        + ["#reels", "#AIAnimation", "#storytelling", "#viral", f"#{lang}"]
-    )))
-
-    caption = (
-        f"{title}\n\n"
-        f"{description}\n\n"
-        f"{clean_tags}\n\n"
-        "✨ Follow for daily animated stories & global adventures."
-    )
-
+    filtered = [
+        t if t.startswith("#") else f"#{t}"
+        for t in raw_tags
+        if str(t).lstrip("#").lower() not in ("viral", "reels", "fyp", "aianimation")
+    ]
+    clean_tags = " ".join(list(dict.fromkeys(filtered + [f"#{lang}Stories"]))[:5])
+    caption = f"{title}\n\n{description}\n\n{clean_tags}".strip()
     return caption[:2200]
 
 
@@ -465,19 +463,23 @@ def create_reel(
     ig_id: str,
     token: str,
     video_url: str,
-    caption: str
+    caption: str,
+    thumb_offset: int | None = None
 ) -> str:
-
     print("\nCreating Instagram Reel container...")
-
+    params = dict(
+        media_type="REELS",
+        video_url=video_url,
+        caption=caption,
+        share_to_feed="true",
+    )
+    if thumb_offset is not None and int(thumb_offset) > 0:
+        params["thumb_offset"] = str(int(thumb_offset))
     result = api(
         "POST",
         f"{ig_id}/media",
         token,
-        media_type="REELS",
-        video_url=video_url,
-        caption=caption,
-        share_to_feed="true"
+        **params
     )
 
     container_id = result.get("id")
@@ -627,17 +629,42 @@ def _publish_single_reel(video_path: Path, meta_path: Path, ig_id: str, token: s
 
     video_url, public_id = cloud_upload(video_path)
     media_id = None
+    ig_seo = metadata.get("instagram_seo") if isinstance(metadata.get("instagram_seo"), dict) else {}
+    thumb_offset = ig_seo.get("thumb_offset_ms")
     try:
         caption = build_caption(metadata)
-        container_id = create_reel(ig_id, token, video_url, caption)
+        container_id = create_reel(ig_id, token, video_url, caption, thumb_offset=thumb_offset)
         wait_for_processing(container_id, token)
         media_id = publish_reel(ig_id, container_id, token)
     finally:
         cloud_delete(public_id)
 
     permalink = get_permalink(media_id, token)
+    try:
+        import analytics_optimizer
+        if ig_seo.get("first_comment"):
+            analytics_optimizer.maybe_post_instagram_first_comment(token, media_id, ig_seo["first_comment"])
+    except Exception as exc:
+        print(f"  (Instagram first comment skipped: {type(exc).__name__})")
     timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
     state["ig_posts"] = (posts + [timestamp])[-40:]
+    ig_vids = state.get("ig_videos", [])
+    if not isinstance(ig_vids, list):
+        ig_vids = []
+    state["ig_videos"] = (ig_vids + [{
+        "media_id": media_id,
+        "permalink": permalink,
+        "language": metadata.get("language", "en"),
+        "category": metadata.get("category"),
+        "style": metadata.get("style"),
+        "hook_type": metadata.get("hook_type"),
+        "series_name": metadata.get("series_name"),
+        "duration_sec": metadata.get("duration_sec"),
+        "duration_bucket": metadata.get("duration_bucket"),
+        "source": metadata.get("source"),
+        "title": metadata.get("title", "Untitled"),
+        "ts": timestamp,
+    }])[-100:]
     save_state(state)
 
     summary(
@@ -685,6 +712,12 @@ def main():
 
     state = load_state()
     token = get_token()
+    try:
+        import analytics_optimizer
+        if analytics_optimizer.sync_instagram_metrics(state, token=token) > 0:
+            save_state(state)
+    except Exception as exc:
+        print(f"  (Instagram Reels insights sync skipped: {type(exc).__name__})")
     ig_id = get_instagram_account(token)
 
     targets = [(VIDEO, META)]

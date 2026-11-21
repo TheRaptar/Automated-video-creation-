@@ -1,5 +1,9 @@
+requests
 pandas
 numpy
 matplotlib
 yfinance
 pytest
+xlrd
+openpyxl
+cloudscraper

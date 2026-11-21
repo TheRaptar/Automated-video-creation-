@@ -3,6 +3,8 @@
 Tests rules-based and multi-factor end-of-day strategies on liquid NSE stocks with realistic Zerodha delivery costs,
 slippage, idle-cash yield and an out-of-sample check. **It places no orders and needs no Zerodha login.**
 
+**Start here:** `AUDIT.md` (Phase 1), `PHASE2.md` (data foundations and run order) and `RESEARCH_CHARTER.md` (acceptance criteria, unchanged).
+
 ## Run without installing anything (GitHub Actions)
 Put `trading-bot/` in your repo root and both files from `trading-bot/.github/workflows/` into the repo's ROOT `.github/workflows/`.
 1. **Alpha lab** - which signals carry any information? (factors, liquidity sweeps, supply/demand zones, macro variables)

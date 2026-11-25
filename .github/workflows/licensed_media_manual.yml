@@ -1,0 +1,189 @@
+name: Licensed Media Add-on (Manual Only)
+
+# Strictly manual-only workflow (NO cron schedule).
+# Completely independent of .github/workflows/daily.yml.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Source mode (open, manifest, own_ig, hybrid)"
+        type: choice
+        options:
+          - open
+          - manifest
+          - own_ig
+          - hybrid
+        default: open
+        required: true
+      query:
+        description: "Search query / storytelling topic"
+        type: string
+        default: "ocean wildlife documentary"
+        required: true
+      sources:
+        description: "Open-license sources (comma-separated: pexels,pixabay,wikimedia,archive)"
+        type: string
+        default: "pexels,pixabay,wikimedia,archive"
+        required: false
+      manifest_path:
+        description: "Path to Permission Manifest JSON (relative to Automated-video-creation/, for manifest/hybrid)"
+        type: string
+        default: ""
+        required: false
+      format:
+        description: "Output video format (short, story, animated, long)"
+        type: choice
+        options:
+          - short
+          - story
+          - animated
+          - long
+        default: short
+        required: true
+      aspect:
+        description: "Output aspect ratio (9:16, 16:9, 1:1)"
+        type: choice
+        options:
+          - "9:16"
+          - "16:9"
+          - "1:1"
+        default: "9:16"
+        required: true
+      language:
+        description: "Narration & subtitle language code (e.g. en, hi, ta, es)"
+        type: string
+        default: "en"
+        required: true
+      music_mode:
+        description: "Background music source (procedural, openverse, freesound)"
+        type: choice
+        options:
+          - procedural
+          - openverse
+          - freesound
+        default: procedural
+        required: true
+      publish:
+        description: "Opt-in publish target (default 'none' for dry-run artifact review)"
+        type: choice
+        options:
+          - none
+          - youtube
+          - instagram
+          - both
+        default: none
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: licensed-media-manual
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: Automated-video-creation
+
+jobs:
+  run-licensed-media:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      PYTHONUNBUFFERED: "1"
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: Automated-video-creation/requirements.txt
+
+      - name: Install FFmpeg and multilingual Noto fonts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ffmpeg \
+            fonts-dejavu-core \
+            fonts-liberation \
+            fonts-noto-core \
+            fonts-noto-cjk
+
+      - name: Install Python packages
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Run Licensed-Media Add-on CLI
+        env:
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+          FREESOUND_API_KEY: ${{ secrets.FREESOUND_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          YT_API_KEY: ${{ secrets.YT_API_KEY }}
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          YT_PRIVACY: public
+          MAX_UPLOADS_PER_DAY: "10"
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          IG_TOKEN_PASSPHRASE: ${{ secrets.IG_TOKEN_PASSPHRASE }}
+          CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
+          CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
+          MAX_IG_POSTS_PER_DAY: "10"
+          INPUT_MODE: ${{ inputs.mode }}
+          INPUT_QUERY: ${{ inputs.query }}
+          INPUT_SOURCES: ${{ inputs.sources }}
+          INPUT_MANIFEST: ${{ inputs.manifest_path }}
+          INPUT_FORMAT: ${{ inputs.format }}
+          INPUT_ASPECT: ${{ inputs.aspect }}
+          INPUT_LANG: ${{ inputs.language }}
+          INPUT_MUSIC: ${{ inputs.music_mode }}
+          INPUT_PUBLISH: ${{ inputs.publish }}
+        run: |
+          ARGS=(
+            "--mode" "$INPUT_MODE"
+            "--query" "$INPUT_QUERY"
+            "--topic" "$INPUT_QUERY"
+            "--sources" "$INPUT_SOURCES"
+            "--format" "$INPUT_FORMAT"
+            "--aspect" "$INPUT_ASPECT"
+            "--lang" "$INPUT_LANG"
+            "--music" "$INPUT_MUSIC"
+            "--publish" "$INPUT_PUBLISH"
+            "--out-dir" "licensed_media_output"
+          )
+          if [ -n "$INPUT_MANIFEST" ]; then
+            ARGS+=("--manifest" "$INPUT_MANIFEST")
+          fi
+          python -m licensed_media.cli "${ARGS[@]}"
+
+      - name: Upload rendered video & license evidence certificates
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: licensed-media-${{ github.run_number }}-${{ inputs.format }}
+          path: Automated-video-creation/licensed_media_output/
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Save provenance ledger updates
+        if: always()
+        run: |
+          git config user.name "video-bot"
+          git config user.email "video-bot@users.noreply.github.com"
+          git add licensed_media_ledger.json 2>/dev/null || true
+          if ! git diff --staged --quiet; then
+            git commit -m "Update licensed media provenance ledger"
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          else
+            echo "No provenance ledger changes to commit."
+          fi

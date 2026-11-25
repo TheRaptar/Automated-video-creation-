@@ -1,0 +1,53 @@
+{
+  "_comment": "Permission Manifest template for owned or creator-approved YouTube, Instagram, and local/cloud media. Every entry MUST pass fail-closed LicenseGate checks before downloading or rendering. Raw third-party youtube.com/watch or instagram.com/reel scraping URLs are automatically rejected.",
+  "schema_version": "1.0",
+  "assets": [
+    {
+      "asset_id": "yt_own_studio_export_01",
+      "media_type": "video",
+      "platform": "youtube",
+      "title": "My Own YouTube Studio Documentary Clip",
+      "creator_name": "TheRaptar",
+      "youtube_video_id": "dQw4w9WgXcQ",
+      "expected_channel_id": "UC_YOUR_OWN_CHANNEL_ID",
+      "source_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      "local_path": "./my_exports/own_clip_01.mp4",
+      "license_code": "SELF-OWNED",
+      "permission_type": "self_owned",
+      "proof_ref": "YouTube Studio channel ownership export (2026-11-25)",
+      "allow_commercial": true,
+      "allow_derivatives": true,
+      "expires_at": "2099-12-31"
+    },
+    {
+      "asset_id": "creator_approved_collab_02",
+      "media_type": "video",
+      "platform": "direct_file",
+      "title": "Creator-Licensed Aerial Mountain Footage",
+      "creator_name": "Jane Doe Films",
+      "source_url": "https://example.com/creators/jane-doe-films",
+      "local_path": "./creator_exports/mountain_collab_4k.mp4",
+      "license_code": "WRITTEN-CREATOR-LICENSE",
+      "permission_type": "written_creator_license",
+      "proof_ref": "Signed collaboration email & PDF release #2026-041 (evidence/release_041.pdf)",
+      "allow_commercial": true,
+      "allow_derivatives": true,
+      "expires_at": "2028-12-31",
+      "attribution_text": "Footage licensed with written permission from Jane Doe Films"
+    },
+    {
+      "asset_id": "ig_own_account_reel_03",
+      "media_type": "video",
+      "platform": "instagram",
+      "title": "My Own Instagram Professional Account Clip",
+      "creator_name": "TheRaptar",
+      "ig_media_id": "17900000000000000",
+      "source_url": "https://www.instagram.com/reel/YOUR_OWN_SHORTCODE/",
+      "license_code": "SELF-OWNED",
+      "permission_type": "self_owned",
+      "proof_ref": "Own Instagram Professional Account via Official Graph API",
+      "allow_commercial": true,
+      "allow_derivatives": true
+    }
+  ]
+}

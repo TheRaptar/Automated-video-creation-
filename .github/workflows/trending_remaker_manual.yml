@@ -1,0 +1,183 @@
+name: Trending-Topic Auto-Remaker (Manual Only)
+
+# Strictly manual-only workflow (NO cron schedule).
+# Completely independent of .github/workflows/daily.yml.
+on:
+  workflow_dispatch:
+    inputs:
+      regions:
+        description: "Comma-separated region codes (e.g. IN,US)"
+        type: string
+        default: "IN,US"
+        required: true
+      niche:
+        description: "Optional YouTube niche (science, tech, education, entertainment, comedy)"
+        type: string
+        default: ""
+        required: false
+      query:
+        description: "Optional search query for high-velocity niche trends"
+        type: string
+        default: ""
+        required: false
+      engine:
+        description: "Original video engine (ai = unmodified make_video.py, open_media = verified open clips, auto)"
+        type: choice
+        options:
+          - ai
+          - open_media
+          - auto
+        default: ai
+        required: true
+      format:
+        description: "Video format (auto, short, story, animated, long)"
+        type: choice
+        options:
+          - auto
+          - short
+          - story
+          - animated
+          - long
+        default: auto
+        required: true
+      aspect:
+        description: "Aspect ratio (auto, 9:16, 16:9, 1:1)"
+        type: choice
+        options:
+          - auto
+          - "9:16"
+          - "16:9"
+          - "1:1"
+        default: auto
+        required: true
+      language:
+        description: "Narration & subtitle language code (e.g. en, hi, ta, es)"
+        type: string
+        default: "en"
+        required: true
+      publish:
+        description: "Opt-in publish target (default 'none' for dry-run artifact review)"
+        type: choice
+        options:
+          - none
+          - youtube
+          - instagram
+          - both
+        default: none
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: trending-remaker-manual
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: Automated-video-creation
+
+jobs:
+  run-trending-remaker:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      PYTHONUNBUFFERED: "1"
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: Automated-video-creation/requirements.txt
+
+      - name: Install FFmpeg and multilingual Noto fonts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ffmpeg \
+            fonts-dejavu-core \
+            fonts-liberation \
+            fonts-noto-core \
+            fonts-noto-cjk
+
+      - name: Install Python packages
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Run Trending-Topic Auto-Remaker CLI
+        env:
+          YT_API_KEY: ${{ secrets.YT_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+          FREESOUND_API_KEY: ${{ secrets.FREESOUND_API_KEY }}
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          YT_PRIVACY: public
+          MAX_UPLOADS_PER_DAY: "10"
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          IG_TOKEN_PASSPHRASE: ${{ secrets.IG_TOKEN_PASSPHRASE }}
+          CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
+          CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
+          MAX_IG_POSTS_PER_DAY: "10"
+          INPUT_REGIONS: ${{ inputs.regions }}
+          INPUT_NICHE: ${{ inputs.niche }}
+          INPUT_QUERY: ${{ inputs.query }}
+          INPUT_ENGINE: ${{ inputs.engine }}
+          INPUT_FORMAT: ${{ inputs.format }}
+          INPUT_ASPECT: ${{ inputs.aspect }}
+          INPUT_LANG: ${{ inputs.language }}
+          INPUT_PUBLISH: ${{ inputs.publish }}
+        run: |
+          ARGS=(
+            "--regions" "$INPUT_REGIONS"
+            "--engine" "$INPUT_ENGINE"
+            "--format" "$INPUT_FORMAT"
+            "--aspect" "$INPUT_ASPECT"
+            "--lang" "$INPUT_LANG"
+            "--publish" "$INPUT_PUBLISH"
+            "--out-dir" "trending_remaker_output"
+          )
+          if [ -n "$INPUT_NICHE" ]; then
+            ARGS+=("--niche" "$INPUT_NICHE")
+          fi
+          if [ -n "$INPUT_QUERY" ]; then
+            ARGS+=("--query" "$INPUT_QUERY")
+          fi
+          python -m trending_remaker.cli "${ARGS[@]}"
+
+      - name: Upload remake blueprint & rendered video artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: trending-remaker-${{ github.run_number }}-${{ inputs.engine }}
+          path: |
+            Automated-video-creation/trending_remaker_output/
+            Automated-video-creation/output/
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Save trending remaker history & ledger
+        if: always()
+        run: |
+          git config user.name "video-bot"
+          git config user.email "video-bot@users.noreply.github.com"
+          git add trending_remaker_history.json licensed_media_ledger.json 2>/dev/null || true
+          if ! git diff --staged --quiet; then
+            git commit -m "Update trending remaker history"
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          else
+            echo "No trending remaker history changes to commit."
+          fi
